@@ -57,7 +57,7 @@ export default function BillingReturn({kind}: {kind:'success'|'cancel'|'restore'
     finally { setBusy(false); }
   }
   return <main className="shell"><div className="middle"><section className="panel stack">
-    <img className="pixel" src="/art/logo.png" alt="Futbol Krillion" style={{width:180,maxWidth:'100%'}} />
+    <img className="pixel" src="/art/logo.png" alt="Futkrill" style={{width:180,maxWidth:'100%'}} />
     <h1 className="title">{premium ? 'UNLIMITED ACTIVE' : kind === 'restore' ? 'RESTORE PURCHASE' : kind === 'cancel' ? 'BACK TO THE PITCH' : 'YOUR PURCHASE'}</h1>
     <p role="status" aria-live="polite">{message}</p>
     {kind === 'restore' && token && accessToken && <button className="btn" disabled={busy} onClick={restore}>{busy ? 'VERIFYING…' : 'RESTORE TO THIS BROWSER'}</button>}

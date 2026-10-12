@@ -5,8 +5,8 @@ import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
 // Factual billing descriptions updated for this build; review before a production launch.
 export const metadata: Metadata = {
-  title: "Terms · Futbol Krillion",
-  description: "The rules for playing Futbol Krillion.",
+  title: "Terms · Futkrill",
+  description: "The rules for playing Futkrill.",
 };
 
 export default function Terms() {
@@ -14,7 +14,7 @@ export default function Terms() {
   return (
     <LegalPage title="Terms" effective="October 12, 2026">
       <p>
-        These terms cover your use of Futbol Krillion, the football trivia game at futbolkrillion.vercel.app. By
+        These terms cover your use of Futkrill, the football trivia game at futbolkrillion.vercel.app. By
         playing, you agree to them. The short version: play fair, have fun, and don&apos;t treat the answer lists as
         gospel. The daily game is free; optional paid access is described below.
       </p>
@@ -51,8 +51,8 @@ export default function Terms() {
 
       <h2>Names and trademarks</h2>
       <p>
-        Player, club, league and competition names belong to their owners and appear only to refer to them. Futbol
-        Krillion is an independent fan-made game. It isn&apos;t affiliated with or endorsed by any player, club,
+        Player, club, league and competition names belong to their owners and appear only to refer to them. Futkrill
+        is an independent fan-made game. It isn&apos;t affiliated with or endorsed by any player, club,
         league, FIFA or UEFA, or by Krillion (krillion.io).
       </p>
 

@@ -142,7 +142,7 @@ test('archive progress and streaks remain separate from free daily',async({page}
 test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE and DAILY ARCHIVE',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
  await page.goto('/unlimited');
- const panel=page.getByRole('region',{name:'Soccer Krillion Unlimited'});
+ const panel=page.getByRole('region',{name:'Futkrill Unlimited'});
  const daily=page.getByRole('region',{name:"Today's daily"});
  await expect(daily).toContainText(/Next daily in \d\d:\d\d:\d\d/);
  await expect(daily.getByRole('link',{name:"PLAY TODAY'S DAILY"})).toBeVisible();
@@ -186,4 +186,14 @@ test('players who paid never see the sales pitch while their status loads',async
  release();
  await expect(page.getByText('Unlimited is yours. Play as many sets as you like.')).toBeVisible();
  await expect(page.getByText(/Hey, I.m Emre/)).toHaveCount(0);
+});
+
+test('the header (logo, EXIT, score) fits a 375px phone during a round, and the page is named Futkrill',async({page})=>{
+ await page.setViewportSize({width:375,height:812});
+ await page.goto('/');await expect(page).toHaveTitle('Futkrill');
+ await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
+ await expect(page.getByRole('button',{name:'EXIT',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ const led=await page.locator('.topbar .led').boundingBox();expect(led!.x+led!.width).toBeLessThanOrEqual(375);
+ await expect(page.getByRole('img',{name:'Futkrill'}).first()).toBeVisible();
 });

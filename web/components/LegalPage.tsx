@@ -12,7 +12,7 @@ export default function LegalPage({ title, effective, children }: { title: strin
   return (
     <main className="shell">
       <header className="topbar">
-        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futbol Krillion" style={{ height: 44 }} /></Link>
+        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
       </header>
       <article className="panel legal">
         <h1 className="title">{title}</h1>

@@ -1,4 +1,4 @@
-# Futbol Krillion
+# Futkrill
 
 A football trivia game with a shared free daily, 30-second rounds, rarity scoring, pixel-art reveals and optional Unlimited access.
 

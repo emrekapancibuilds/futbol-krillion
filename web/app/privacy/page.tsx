@@ -3,8 +3,8 @@ import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
 // Describes this purchase build. Review before publishing a production deployment.
 export const metadata: Metadata = {
-  title: "Privacy · Futbol Krillion",
-  description: "What Futbol Krillion keeps on your device and what reaches our server.",
+  title: "Privacy · Futkrill",
+  description: "What Futkrill keeps on your device and what reaches our server.",
 };
 
 export default function Privacy() {
@@ -12,7 +12,7 @@ export default function Privacy() {
   return (
     <LegalPage title="Privacy" effective="October 12, 2026">
       <p>
-        Futbol Krillion offers a free daily football trivia game and optional paid Unlimited access. Your scores
+        Futkrill offers a free daily football trivia game and optional paid Unlimited access. Your scores
         stay in your browser. Purchase access uses an essential session cookie, Stripe payment records and
         Supabase. Restoring a purchase verifies your email with a passwordless Supabase link. The game runs no
         advertising or analytics trackers.
@@ -100,7 +100,7 @@ export default function Privacy() {
 
       <h2>Children</h2>
       <p>
-        Futbol Krillion does not knowingly collect personal information from children under 13. If you think a child has sent us personal information (in an email,
+        Futkrill does not knowingly collect personal information from children under 13. If you think a child has sent us personal information (in an email,
         say), contact us and we&apos;ll delete it.
       </p>
 

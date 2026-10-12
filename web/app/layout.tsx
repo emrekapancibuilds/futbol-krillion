@@ -13,10 +13,10 @@ const site = process.env.NEXT_PUBLIC_SITE_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(site),
-  title: "Futbol Krillion",
+  title: "Futkrill",
   description: "Seven football prompts a day. The more obscure your correct answer, the more you score.",
   openGraph: {
-    title: "Futbol Krillion",
+    title: "Futkrill",
     description: "Seven football prompts a day. The more obscure your correct answer, the more you score.",
     images: [{ url: "/art/og.png", width: 1200, height: 630 }],
   },

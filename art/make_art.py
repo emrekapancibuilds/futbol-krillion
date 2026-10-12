@@ -1,4 +1,4 @@
-"""Futbol Krillion pixel art, drawn in code so every asset is crisp and reproducible.
+"""Futkrill pixel art, drawn in code so every asset is crisp and reproducible.
 
 Run:  pipeline/.venv/bin/python art/make_art.py
 Writes native-resolution PNGs to web/public/art/ (the site scales them with image-rendering: pixelated)
@@ -210,7 +210,7 @@ def stadium(w: int, h: int, seed: int = 7, frame: int = 0) -> Canvas:
         cv.rect(0, y1, w - 1, y1, ROOF_EDGE if k < tiers - 1 else STAND[0])
 
     # scoreboard hanging from the roof
-    label = "FUTBOL KRILLION"
+    label = "FUTKRILL"
     tw = text_width(label, FONT3)
     sb_w, sb_h = tw + 8, 11
     sx, sy = (w - sb_w) // 2, roof_y - (8 if portrait else 6)
@@ -246,7 +246,7 @@ def stadium(w: int, h: int, seed: int = 7, frame: int = 0) -> Canvas:
 
     # LED advertising boards
     cv.rect(0, board_y, w - 1, board_y + 5, BOARD)
-    msg = "FUTBOL KRILLION  GAME 1  KRILLION  "
+    msg = "FUTKRILL  GAME 1  FUTKRILL  "
     x, colours = 2, [AMBER, CYAN, RED]
     k = 0
     while x < w:
@@ -448,15 +448,67 @@ def mascot() -> Canvas:
     return cv
 
 
-# ---------------------------------------------------------------- logo
+# ---------------------------------------------------------------- soccer ball + logo
+BALL_SHADE = (176, 184, 204)
+BALL_PATCH = (22, 26, 44)
+
+
+def _inside_polygon(px, py, pts):
+    inside = False
+    j = len(pts) - 1
+    for i in range(len(pts)):
+        xi, yi = pts[i]
+        xj, yj = pts[j]
+        if (yi > py) != (yj > py) and px < (xj - xi) * (py - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _pentagon(cx, cy, r, up_deg):
+    import math
+    return [(cx + r * math.cos(math.radians(up_deg + 72 * k)), cy - r * math.sin(math.radians(up_deg + 72 * k))) for k in range(5)]
+
+
+def ball(n: int) -> Canvas:
+    """A pixel soccer ball in an n x n box: white sphere, dark pentagon in the middle and five clipped around the
+    rim, a shaded lower-right, a 1px outline. Sampled per pixel from a geometric model, so any size stays crisp."""
+    import math
+    cv = Canvas(n, n)
+    c = (n - 1) / 2
+    R = n / 2 - 1.0                                   # leave a 1px border for the outline
+    patches = [_pentagon(c, c, R * 0.32, 90)]
+    for k in range(5):                                # rim patches, centred between the middle pentagon's corners
+        a = math.radians(126 + 72 * k)
+        patches.append(_pentagon(c + R * 0.80 * math.cos(a), c - R * 0.80 * math.sin(a), R * 0.24, 126 + 72 * k + 180))
+    for y in range(n):
+        for x in range(n):
+            dx, dy = x - c, y - c
+            if dx * dx + dy * dy > R * R + 0.35:
+                continue
+            col = WHITE
+            if any(_inside_polygon(x, y, pts) for pts in patches):
+                col = BALL_PATCH
+            elif dx + dy > R * 0.95:                  # shaded crescent, lower right
+                col = BALL_SHADE
+            cv.put(x, y, col)
+    cv.outline()
+    return cv
+
+
 def logo() -> Canvas:
-    top, bottom = "FUTBOL", "KRILLION"
-    w = max(text_width(top, FONT5, 2), text_width(bottom, FONT5, 2)) + 6
-    cv = Canvas(w, 22)
+    """Ball, then FUT over KRILL (two lines keep it no wider than the old logo, which the phone header needs)."""
+    top, bottom = "FUT", "KRILL"
+    tw = text_width(bottom, FONT5, 1)
+    b = ball(20)
+    w = b.w + 4 + tw + 4
+    cv = Canvas(w, b.h + 2)
+    cv.blit(b, 1, 1)
+    x0 = b.w + 5
     for text, y in ((top, 2), (bottom, 12)):
-        x = (w - text_width(text, FONT5, 2)) // 2
-        draw_text(cv, text, x + 1, y + 1, FONT5, AMBER_DIM, gap=2)  # drop shadow
-        draw_text(cv, text, x, y, FONT5, GOLD, gap=2, shade=GOLD_DARK)
+        x = x0 + (tw - text_width(text, FONT5, 1)) // 2
+        draw_text(cv, text, x + 1, y + 1, FONT5, AMBER_DIM, gap=1)      # drop shadow
+        draw_text(cv, text, x, y, FONT5, GOLD, gap=1, shade=GOLD_DARK)
     cv.outline()
     return cv
 
@@ -504,8 +556,8 @@ def main():
     og.alpha_composite(big, ((1200 - big.width) // 2, 150))
     og.alpha_composite(scaled(m, 5), (1200 // 2 - 80, 360))
     og.convert("RGB").save(OUT / "og.png")
-    scaled(m, 1).save(OUT / "favicon-32.png")
-    scaled(m, 6).save(OUT / "icon-192.png")
+    scaled(ball(32).im, 1).save(OUT / "favicon-32.png")
+    scaled(ball(32).im, 6).save(OUT / "icon-192.png")
 
     # review sheet
     sheet = Image.new("RGBA", (1340, 1720), (*INK, 255))

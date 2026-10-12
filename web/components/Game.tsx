@@ -232,7 +232,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
   return (
     <main className="shell">
       <header className="topbar">
-        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futbol Krillion" style={{ height: 44 }} /></Link>
+        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
         <div className="right">
           <Link className="linkish" href="/unlimited">Unlimited</Link>
           {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}

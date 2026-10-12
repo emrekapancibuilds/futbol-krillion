@@ -59,17 +59,17 @@ export default function SubscriptionPanel({ onStatus }: { onStatus?: (status: Bi
   const actionClass = status?.premium ? 'btn' : 'btn secondary';
   // Until the first status check is back, say so and nothing else: showing the pitch meanwhile flashed Emre's note
   // at players who had already paid (user, 2026-10-12), and the buy button can't race the anonymous bootstrap.
-  if (loading) return <section className="panel stack subscription" aria-label="Soccer Krillion Unlimited" aria-busy="true">
+  if (loading) return <section className="panel stack subscription" aria-label="Futkrill Unlimited" aria-busy="true">
     <div className="billing-heading"><strong className="title">UNLIMITED</strong></div>
     <p className="muted" role="status">Checking your Unlimited…</p>
   </section>;
-  return <section className="panel stack subscription" aria-label="Soccer Krillion Unlimited">
+  return <section className="panel stack subscription" aria-label="Futkrill Unlimited">
     <div className="billing-heading"><strong className="title">UNLIMITED</strong>{status?.premium && <span className="premium-badge">ACTIVE</span>}</div>
     {status?.premium ? <>
       <p className="muted">Unlimited is yours. Play as many sets as you like.</p>
     </> : <>
       <div className="creator-note">
-        <p>Hey, I&apos;m Emre. I made Futbol Krillion for people who know their football a little too well.</p>
+        <p>Hey, I&apos;m Emre. I made Futkrill for people who know their football a little too well.</p>
         <p>Done with the daily? Keep playing, in whichever league or competition you know best. Your purchase also helps me keep building the game.</p>
         <p>Thanks for playing. — Emre</p>
       </div>
