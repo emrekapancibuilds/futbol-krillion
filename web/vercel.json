@@ -3,9 +3,15 @@
   "framework": "nextjs",
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/",
       "has": [{ "type": "host", "value": "futbolkrillion.vercel.app" }],
-      "destination": "https://futkrill.vercel.app/:path*",
+      "destination": "https://futkrill.vercel.app/",
+      "permanent": true
+    },
+    {
+      "source": "/:path+",
+      "has": [{ "type": "host", "value": "futbolkrillion.vercel.app" }],
+      "destination": "https://futkrill.vercel.app/:path+",
       "permanent": true
     }
   ]
