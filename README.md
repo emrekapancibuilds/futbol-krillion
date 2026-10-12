@@ -37,6 +37,14 @@ This version uses a $4.99 USD monthly Stripe subscription. Supabase verifies the
 
 The public repository is not an automatic production deployment. Local sandbox verification has covered Checkout, paid access, the Portal, scheduled cancellation and webhook replay. Supabase's default email sender is suitable only for project-team testing; configure custom SMTP before emailing real customers or branding emails.
 
+## Parallel work branches
+
+- `main`: tested monthly subscription and Supabase email restoration.
+- `codex/supabase-email`: Codex continuation branch based on `main`.
+- `claude/one-time-unlock`: preserved Claude one-time purchase experiment at source snapshot `7daa044`. It has different payment semantics and still needs verified-email restoration; do not merge it wholesale or deploy it as the subscription app.
+
+The owner is choosing between the monthly and one-time models. Keep this decision explicit when opening a payment-related pull request. For general gameplay changes, start a fresh `claude/<task>` branch from `main` instead of the experiment.
+
 ## Validation
 
 ```sh
