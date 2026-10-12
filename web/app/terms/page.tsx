@@ -14,7 +14,7 @@ export default function Terms() {
   return (
     <LegalPage title="Terms" effective="October 12, 2026">
       <p>
-        These terms cover your use of Futkrill, the football trivia game at futbolkrillion.vercel.app. By
+        These terms cover your use of Futkrill, the football trivia game at futkrill.vercel.app. By
         playing, you agree to them. The short version: play fair, have fun, and don&apos;t treat the answer lists as
         gospel. The daily game is free; optional paid access is described below.
       </p>
