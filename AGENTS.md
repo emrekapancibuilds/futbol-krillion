@@ -12,4 +12,4 @@ Read `README.md`, `web/README.md`, and `web/AGENTS.md` before editing the app.
 - Run typecheck, lint and relevant tests. Browser tests require a local server or start their own on port 3100.
 - Public repository updates do not deploy production. Production deployment and live billing are separate work.
 
-For billing-model changes, check with the owner before replacing the monthly subscription with a one-time purchase. Another local Claude experiment has used a one-time unlock; it must not be merged blindly into this subscription implementation.
+The owner selected a $4.99 USD one-time Unlimited purchase on October 12, 2026. Preserve that model. The historical Claude experiment must not replace the server-side purchase checks or Supabase verified-email restoration.

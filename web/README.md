@@ -1,6 +1,6 @@
 # Web application setup
 
-Use Node.js 24 or newer and run commands from `web/`. The game uses Next.js, React, Stripe Billing and Supabase.
+Use Node.js 24 or newer and run commands from `web/`. The game uses Next.js, React, Stripe Checkout and Supabase.
 
 ```sh
 npm ci
@@ -18,8 +18,7 @@ Set `NEXT_PUBLIC_APP_URL` to the exact local or deployed origin. `NEXT_PUBLIC_SI
 - `SUPABASE_PUBLISHABLE_KEY`: publishable key for the separate Auth verification client.
 - `STRIPE_MODE=test`: use sandbox mode while developing.
 - `STRIPE_SECRET_KEY`: matching `sk_test_…` key.
-- `STRIPE_PRICE_ID`: active $4.99 USD/month recurring licensed price in that sandbox.
-- `STRIPE_PORTAL_CONFIGURATION_ID`: Portal configuration allowing invoice history, payment-method changes and cancellation at period end.
+- `STRIPE_PRICE_ID`: active $4.99 USD non-recurring one-time price in that sandbox.
 - `STRIPE_WEBHOOK_SECRET`: signing secret from your local listener or deployment's endpoint.
 - `STRIPE_AUTOMATIC_TAX=false`: leave disabled until business/tax settings are deliberately configured.
 
@@ -27,13 +26,15 @@ Secrets must never use the `NEXT_PUBLIC_` prefix. Do not commit `.env.developmen
 
 ## Database
 
-The schema is in `supabase/migrations/`. Apply the migration once to a new Supabase project using its supported migration tooling. Do not reapply it to a project where it is already recorded.
+The schema is in `supabase/migrations/`. Apply the migrations in order once to a new Supabase project using its supported migration tooling. Do not reapply it to a project where it is already recorded.
 
-All `fk_*` tables are server-only with RLS enabled and no anon/authenticated grants. `fk_entitlements` is an invoker view. RPCs enforce atomic ownership, single-use recovery and synchronization locks. Do not expose these records to browser clients or add broad Auth-user policies.
+All `fk_*` tables are server-only with RLS enabled and no anon/authenticated grants. `fk_purchase_entitlements` is an invoker view. RPCs enforce atomic ownership, single-use recovery and synchronization locks. Do not expose these records to browser clients or add broad Auth-user policies.
 
 ## Stripe Checkout and webhooks
 
-Checkout uses a $4.99 USD monthly subscription, flexible billing mode, standard Billing (`managed_payments.enabled=false`) and hosted Checkout/Portal. The client cannot choose the price or claim premium access. Paid invoices determine access; failed renewals do not extend it. Cancellation preserves time already paid for.
+Checkout uses a $4.99 USD one-time payment with standard hosted Checkout (`managed_payments.enabled=false`). The client cannot choose the price or claim premium access. The server verifies the exact price, amount, currency, customer and successful captured PaymentIntent. Access has no renewal or expiry date. A full refund revokes it; an open/lost dispute suspends it; a won dispute restores it. Partial refunds keep access. View receipt opens only a receipt owned by the current browser.
+
+One-time purchases are stored separately in `fk_purchases`; the earlier subscription tables remain as historical records. A legacy subscription does not become a permanent unlock. No live subscription migration is performed by this change.
 
 ```sh
 stripe listen --forward-to localhost:3100/api/stripe/webhook
@@ -44,11 +45,11 @@ Authenticate the CLI to the same sandbox and save its signing secret locally. Su
 ```text
 checkout.session.completed
 checkout.session.async_payment_succeeded
-customer.subscription.created
-customer.subscription.updated
-customer.subscription.deleted
-invoice.paid
-invoice.payment_failed
+checkout.session.async_payment_failed
+charge.refunded
+charge.dispute.created
+charge.dispute.updated
+charge.dispute.closed
 customer.updated
 ```
 
@@ -81,9 +82,9 @@ npm run test:e2e
 npm run build
 ```
 
-Browser tests start a server on port 3100. To test an existing local sandbox server, use `FK_E2E_REUSE_SERVER=true npm run test:e2e`. Billing/database unit tests use offline fixtures and PGlite. Browser tests cover original gameplay, paywalls, callback token handling, archive isolation and monthly Checkout UI. A fresh build downloads the existing Google Fonts.
+Browser tests start a server on port 3100. To test an existing local sandbox server, use `FK_E2E_REUSE_SERVER=true npm run test:e2e`. Billing/database unit tests use offline fixtures and PGlite. Browser tests cover original gameplay, paywalls, callback token handling, archive isolation and one-time purchase UI. A fresh build downloads the existing Google Fonts.
 
-Before a production launch, complete inbox delivery/restoration and time-advanced renewal/failure checks, configure SMTP and live Stripe settings, review policies, and deploy the `web/` directory. Publishing Git commits does not deploy the site.
+Before a production launch, complete inbox delivery/restoration, configure SMTP and live Stripe settings, review policies, and deploy the `web/` directory. Publishing Git commits does not deploy the site.
 
 ## Game data
 

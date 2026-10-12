@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
-// Describes this subscription build. Review before publishing a production deployment.
+// Describes this purchase build. Review before publishing a production deployment.
 export const metadata: Metadata = {
   title: "Privacy · Futbol Krillion",
   description: "What Futbol Krillion keeps on your device and what reaches our server.",
@@ -13,7 +13,7 @@ export default function Privacy() {
     <LegalPage title="Privacy" effective="October 12, 2026">
       <p>
         Futbol Krillion offers a free daily football trivia game and optional paid Unlimited access. Your scores
-        stay in your browser. Subscription access uses an essential session cookie, Stripe payment records and
+        stay in your browser. Purchase access uses an essential session cookie, Stripe payment records and
         Supabase. Restoring a purchase verifies your email with a passwordless Supabase link. The game runs no
         advertising or analytics trackers.
       </p>
@@ -43,7 +43,7 @@ export default function Privacy() {
       <p>
         Rounds are tracked with a signed ticket that your browser holds and sends back. It says which round
         you&apos;re playing and when your time runs out. Paid rounds are also tied to an anonymous browser session.
-        We store subscription, recovery and game-session records needed to enforce paid access, but do not store
+        We store purchase, recovery and game-session records needed to enforce paid access, but do not store
         a history of the answers you type or sync your scores.
       </p>
 
@@ -52,7 +52,7 @@ export default function Privacy() {
         We set an essential HttpOnly session cookie to recognize your browser for purchases and paid play. Only a
         hash of its random credential is stored in the database. Clearing the cookie removes this browser&apos;s
         access until you verify your payment email through Restore Purchase. Stripe may use its own cookies on
-        its hosted payment and subscription-management pages.
+        its hosted payment and receipt pages.
       </p>
 
       <h2>Analytics and ads</h2>
@@ -80,12 +80,12 @@ export default function Privacy() {
       <h2>Payments and email verification</h2>
       <p>
         Stripe processes card payments and stores the payment details. Our server keeps Stripe customer and
-        subscription identifiers, the payment email, subscription status and paid-through dates. It does not store
+        purchase and payment identifiers, the payment email, purchase status and purchase dates. It does not store
         your full card number. Stripe handles this information under its{' '}
         <a href="https://stripe.com/privacy">privacy policy</a>.
       </p>
       <p>
-        Supabase stores the records used for browser sessions and subscription access. If you use Restore Purchase,
+        Supabase stores the records used for browser sessions and purchase access. If you use Restore Purchase,
         Supabase Auth creates an email identity and sends a verification link. No password is required. We compare
         the verified email with the current Stripe payment email before attaching paid access to your browser.
         Recovery requests expire after 15 minutes and are single-use. Verification does not restore local scores.
@@ -94,8 +94,8 @@ export default function Privacy() {
       <h2>Your data, your call</h2>
       <p>
         Clear the site&apos;s browser data to erase local progress and its session cookie. This does not cancel a
-        subscription or delete server-side payment and verification records. Use Manage Subscription to cancel,
-        and contact {mail} for questions or requests about server-side information.
+        purchase or delete server-side payment and verification records.
+        Contact {mail} for questions or requests about server-side information.
       </p>
 
       <h2>Children</h2>

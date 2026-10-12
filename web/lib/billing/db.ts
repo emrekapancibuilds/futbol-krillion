@@ -5,7 +5,7 @@ import { HttpError } from './security.ts';
 
 export function db() {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new HttpError(503, 'Subscriptions are being set up. Daily play is available.');
+  if (!url || !key) throw new HttpError(503, 'Unlimited purchases are being set up. Daily play is available.');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10000), cache: 'no-store' }) } });
 }

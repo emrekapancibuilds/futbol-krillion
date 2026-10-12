@@ -63,11 +63,12 @@ export default function Terms() {
         answer lists to use elsewhere.
       </p>
 
-      <h2>Unlimited subscriptions</h2>
+      <h2>Unlimited purchase</h2>
       <p>
-        Unlimited costs $4.99 USD per month and renews automatically until canceled. Applicable taxes are displayed
-        at Checkout. Stripe handles payment and subscription management. You can cancel through Manage Subscription;
-        access continues through the period already paid for. A failed renewal does not extend that period.
+        Unlimited costs $4.99 USD as a one-time payment, with no recurring charges. Applicable taxes are displayed
+        at Checkout. Stripe handles payment. Your purchase unlocks Unlimited practice and the daily archive
+        for as long as the game is available. A fully refunded payment no longer grants access; access may be
+        suspended while a payment is disputed. Contact us with purchase questions or refund requests.
       </p>
       <p>
         Access is recognized in the purchasing browser. To restore it on another browser, verify the email used

@@ -51,5 +51,5 @@ export async function restore(req: Request, session: Visitor, raw: unknown, acce
     p_old_hash: session.hash, p_new_hash: hash(fresh), p_customers: ids });
   if (!restored) throw new HttpError(400, 'This verification link has already been used or expired. Request a new one.');
   session.cookie = sessionCookie(fresh); session.hash = hash(fresh);
-  return { ...await status(session.id), message: ids.length ? 'Welcome back! Your purchase is restored to this browser.' : 'Email verified. No Futbol Krillion subscription was found for this email.' };
+  return { ...await status(session.id), message: ids.length ? 'Welcome back! Your purchase is restored to this browser.' : 'Email verified. No Futbol Krillion purchase was found for this email.' };
 }

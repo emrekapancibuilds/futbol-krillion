@@ -41,7 +41,7 @@ export async function database() {
   const rpc=async(name:string,args:Record<string,unknown>)=>{
     const values=Object.values(args).map(v=>typeof v==='object'&&v!==null&&!Array.isArray(v)?JSON.stringify(v):v);
     // jsonb snapshots are arrays; PostgreSQL must receive JSON, not a text[] literal.
-    Object.keys(args).forEach((k,i)=>{if(k==='p_subscriptions')values[i]=JSON.stringify(args[k]);});
+    Object.keys(args).forEach((k,i)=>{if(k==='p_subscriptions'||k==='p_purchases')values[i]=JSON.stringify(args[k]);});
     const result=await pg.query<{value:unknown}>(`select ${name}(${Object.keys(args).map((k,i)=>`${k}=>$${i+1}`).join(',')}) as value`,values);
     return result.rows[0]?.value;
   };
