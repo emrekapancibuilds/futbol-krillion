@@ -251,3 +251,19 @@ def test_champions_league_regulars_outrank_clubs_with_a_better_overall_fame_scor
     world.club_prestige = pd.Series({"Qars": 0.4, "Qjuv": 0.6, "Qbur": 0.3})     # same league seasons; Qjuv looks bigger
     scores = by_key(world)["clubs:bundesliga"].scores
     assert scores["Qars"] > scores["Qjuv"]
+
+
+def test_some_team_prompts_beyond_the_top_five_can_be_dailies_but_not_all(world):
+    """User, 2026-10-12: 'some can be in dailies, but not all'. The best-known extra leagues and the bigger football
+    countries qualify; the rest (and every player prompt outside the top 5) stays Unlimited only."""
+    extra = pd.DataFrame({"player_id": ["Q1"] * 3, "league_key": ["eredivisie", "belgian-pro-league", "super-lig"],
+                          "season": [2013.0] * 3, "club_id": ["Qars", "Qjuv", "Qbur"], "apps": 1, "goals": 0})
+    world.league_apps = pd.concat([world.league_apps, extra], ignore_index=True)
+    world.clubs = world.clubs.assign(country=["Netherlands", "Malta", "Turkey"])
+    world.euro_clubs = pd.DataFrame({"club_id": ["Qars", "Qjuv", "Qbur"], "competition_id": ["CL"] * 3, "season": [2015.0] * 3})
+    c = by_key(world)
+    assert c["clubs:eredivisie"].mainstream and c["clubs:super-lig"].mainstream
+    assert not c["clubs:belgian-pro-league"].mainstream
+    assert c["clubs:europe:Netherlands"].mainstream and c["clubs:europe:Turkey"].mainstream
+    assert not c["clubs:europe:Malta"].mainstream
+    assert not c["league:eredivisie"].mainstream            # players: still only the top 5

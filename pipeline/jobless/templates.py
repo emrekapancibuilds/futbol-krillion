@@ -6,7 +6,8 @@ from dataclasses import dataclass
 import pandas as pd
 
 from jobless import facts
-from jobless.config import EUROPEAN_COMPETITIONS, LEAGUES, OUT, TABLE_DECIDED_LEAGUES, TOURNAMENTS
+from jobless.config import (EUROPEAN_COMPETITIONS, LEAGUES, OUT, TABLE_DECIDED_LEAGUES, TEAM_DAILY_COUNTRIES, TEAM_DAILY_LEAGUES,
+                            TOURNAMENTS)
 from jobless.text import club_fold
 
 MIN_CLUB_PLAYERS = 40
@@ -339,7 +340,7 @@ def club_family_prompts(w: World):
         league = LEAGUES[league_key]
         seasons = g.groupby("club_id")["season"].nunique()
         yield Candidate(f"clubs:{league_key}", "clubs", "club", f"Name a team that played in {league.phrase}{TM_ERA}",
-                        {cid: facts.seasons_line(n, league.name) for cid, n in seasons.items()}, league_key in TOP5,
+                        {cid: facts.seasons_line(n, league.name) for cid, n in seasons.items()}, league_key in TEAM_DAILY_LEAGUES,
                         scores=_club_scores(w, seasons))
     if not w.cl_apps.empty:
         seasons = w.cl_apps.groupby("club_id")["season"].nunique()
@@ -357,7 +358,7 @@ def club_family_prompts(w: World):
     for country, ids in clubs.groupby(countries):
         yield Candidate(f"clubs:europe:{country}", "clubs", "club",
                         f"Name a team from {country} that played in Europe{TM_ERA}", {cid: lines[cid] for cid in ids},
-                        False, scores=_club_scores(w, euro_seasons.reindex(ids).fillna(0)))
+                        country in TEAM_DAILY_COUNTRIES, scores=_club_scores(w, euro_seasons.reindex(ids).fillna(0)))
 
 
 def manager_prompts(w: World):
