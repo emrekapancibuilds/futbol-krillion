@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-const free={premium:false,canManage:false,configured:true,restoreAvailable:true,status:'free',paidThrough:null,renewsAt:null,cancelsAt:null};
-const premium={...free,premium:true,canManage:true,status:'active',paidThrough:'2026-12-01T00:00:00Z',renewsAt:'2026-12-01T00:00:00Z'};
+const free={premium:false,canManage:false,configured:true,restoreAvailable:true,status:'free',purchasedAt:null};
+const premium={...free,premium:true,canManage:true,status:'paid',purchasedAt:'2026-10-12T00:00:00Z'};
 
-test('daily stays free; monthly pricing matches the existing pixel design on desktop and mobile',async({page})=>{
+test('daily stays free; one-time pricing matches the existing pixel design on desktop and mobile',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await expect(page.getByRole('heading',{name:/Daily #/})).toBeVisible();
  await expect(page.getByText(/30 seconds each/)).toBeVisible();
@@ -12,10 +12,10 @@ test('daily stays free; monthly pricing matches the existing pixel design on des
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:'tests/browser/daily-mobile.png',fullPage:true});
  await page.setViewportSize({width:1280,height:720});
- await page.goto('/unlimited');await expect(page.getByText('$4.99 USD / month',{exact:true})).toBeVisible();
- await expect(page.getByRole('button',{name:'UPGRADE TO UNLIMITED'})).toBeVisible();
- await expect(page.getByText(/Renews monthly until canceled/)).toBeVisible();
- await expect(page.getByText(/No subscription|PLAY FREE/)).toHaveCount(0);
+ await page.goto('/unlimited');await expect(page.getByText('$4.99 USD · pay once',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'})).toBeVisible();
+ await expect(page.getByText(/One payment unlocks Unlimited/)).toBeVisible();
+ await expect(page.getByText(/Renews monthly|Manage Subscription/)).toHaveCount(0);
  await page.screenshot({path:'tests/browser/billing-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
@@ -51,14 +51,14 @@ test('forged flags and credentials cannot unlock either premium API family',asyn
  const csrf=await page.request.post('/api/billing/checkout',{data:{},headers:{origin:'https://attacker.example'}});expect(csrf.status()).toBe(403);
  const large=await page.request.post('/api/unlimited/start',{data:{seen:Array(2000).fill('p0123456789')},headers:{origin:'http://localhost:3100'}});
  expect([402,503]).toContain(large.status());
- await page.goto('/unlimited/play');await expect(page.getByRole('button',{name:'UPGRADE TO UNLIMITED'})).toBeVisible();
+ await page.goto('/unlimited/play');await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'})).toBeVisible();
  await expect(page.getByRole('button',{name:'MIXED',exact:true})).toHaveCount(0);
 });
 
 test('checkout provider errors leave free play available',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
  await page.route('**/api/billing/checkout',r=>r.fulfill({status:503,json:{error:'Checkout temporarily unavailable.'}}));
- await page.goto('/unlimited');await page.getByRole('button',{name:'UPGRADE TO UNLIMITED'}).click();
+ await page.goto('/unlimited');await page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).click();
  await expect(page.getByRole('status')).toContainText('Checkout temporarily unavailable');
  await page.goto('/');await expect(page.getByRole('button',{name:'KICK OFF',exact:true})).toBeEnabled();
 });
@@ -67,7 +67,7 @@ test('anonymous bootstrap is coalesced before checkout',async({page})=>{
  let requests=0;let release!:()=>void;
  const ready=new Promise<void>(resolve=>{release=resolve;});
  await page.route('**/api/billing/session',async r=>{requests++;await ready;await r.fulfill({json:free});});
- await page.goto('/unlimited');const upgrade=page.getByRole('button',{name:'UPGRADE TO UNLIMITED'});
+ await page.goto('/unlimited');const upgrade=page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
  await expect(upgrade).toBeDisabled();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));release();
  await expect(upgrade).toBeEnabled();expect(requests).toBe(1);
 });
@@ -90,13 +90,17 @@ test('restore removes token fragment and requires an explicit verification POST'
 test('success URL alone cannot activate premium; cancellation returns safely',async({page})=>{
  await page.goto('/billing/success');await expect(page.getByRole('status')).toContainText('No checkout was specified');
  await expect(page.getByRole('heading',{name:'UNLIMITED ACTIVE'})).toHaveCount(0);
- await page.route('**/api/billing/checkout/confirm',r=>r.fulfill({json:premium}));
+ let confirmations=0;
+ await page.route('**/api/billing/checkout/confirm',r=>++confirmations===1
+  ? r.fulfill({status:409,json:{error:'Another request is in progress. Please try again in a moment.'}})
+  : r.fulfill({json:premium}));
  await page.goto('/billing/success?session_id=cs_test_fixture');
  await expect(page.getByRole('heading',{name:'UNLIMITED ACTIVE'})).toBeVisible();
+ expect(confirmations).toBe(2);
  await page.goto('/billing/cancel');await expect(page.getByRole('status')).toContainText('Checkout canceled');
 });
 
-test('existing Unlimited categories, seen prompts and lifetime totals survive subscription integration',async({page})=>{
+test('existing Unlimited categories, seen prompts and lifetime totals survive purchase integration',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
  await page.goto('/');
  await page.evaluate(()=>localStorage.setItem('fk:unlimited',JSON.stringify({results:[],category:'premier-league',total:4321,played:21,sets:3,seen:['pold']})));

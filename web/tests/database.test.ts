@@ -4,25 +4,27 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 const pg = new PGlite();
-const migration = readdirSync('supabase/migrations').find(x=>x.endsWith('_account_free_subscriptions.sql'))!;
+const migrations = readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql')).sort();
 const query = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) => (await pg.query<T>(sql, params)).rows;
 const digest = (letter: string) => letter.repeat(64);
 let visitorId: string;
 before(async () => {
  await pg.exec('create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to service_role;');
- await pg.exec(readFileSync(`supabase/migrations/${migration}`, 'utf8'));
+ for (const migration of migrations) await pg.exec(readFileSync(`supabase/migrations/${migration}`, 'utf8'));
  visitorId = (await query<{id:string}>("select public.fk_new_session($1) as id", [digest('a')]))[0].id;
 });
 after(async () => { await pg.close(); });
 
 test('migration: all private tables have RLS, no public grants, and invoker-only RPCs', async () => {
  const tables = await query<{name:string;rls:boolean}>("select relname name,relrowsecurity rls from pg_class where relname like 'fk_%' and relkind='r'");
- assert.equal(tables.length,11); assert.ok(tables.every(t=>t.rls));
+ assert.equal(tables.length,12); assert.ok(tables.every(t=>t.rls));
  assert.deepEqual(await query("select table_name from information_schema.role_table_grants where table_name like 'fk_%' and grantee in ('anon','authenticated','PUBLIC')"), []);
  assert.deepEqual(await query("select proname from pg_proc where proname like 'fk_%' and prosecdef"), []);
  for (const role of ['anon','authenticated']) {
   await pg.exec(`set role ${role}`);
   await assert.rejects(()=>query('select * from public.fk_sessions'), /permission denied/);
+  await assert.rejects(()=>query('select * from public.fk_purchase_entitlements'), /permission denied/);
+  await assert.rejects(()=>query('select * from public.fk_purchases'), /permission denied/);
   await assert.rejects(()=>query('select public.fk_new_session($1)', [digest('b')]), /permission denied/);
   await pg.exec('reset role');
  }
@@ -54,7 +56,7 @@ async function sync(id: string, state: string, paidThrough: string | null, event
  } finally { await query('select fk_release_lock($1,$2)',['customer:false:cus_test',owner]); }
 }
 
-test('purchase: atomic checkout ownership and active entitlement; duplicate events do not mutate access', async () => {
+test('legacy subscription records remain atomic but do not become one-time entitlements', async () => {
  await query("insert into fk_customers(id,livemode) values('cus_test',false)");
  const checkout=(await query<{id:string}>("insert into fk_checkouts(visitor_id,customer_id,livemode) values($1,'cus_test',false) returning id",[visitorId]))[0].id;
  await assert.rejects(()=>query("insert into fk_checkouts(visitor_id,customer_id,livemode) values($1,'cus_test',false)",[visitorId]),/duplicate key/);
@@ -65,7 +67,7 @@ test('purchase: atomic checkout ownership and active entitlement; duplicate even
  assert.equal((await query('select * from fk_webhook_events')).length,1);
 });
 
-test('billing lifecycle: renewal, failed payment, cancellation, expiration, and disabled statuses', async () => {
+test('legacy subscription lifecycle remains internally consistent for historical records', async () => {
  const future=new Date(Date.now()+3600000).toISOString();
  for (const [state,through,active] of [['active',future,true],['past_due',future,true],['canceled',future,true],
   ['past_due','2000-01-01T00:00:00Z',false],['canceled','2000-01-01T00:00:00Z',false],['incomplete',future,false],['unpaid',future,false]] as const) {
@@ -92,4 +94,20 @@ test('database relationships and cross-customer restoration cannot be manipulate
  await query("insert into fk_recovery_tokens(token_hash,email,livemode) values($1,'owner@example.com',false)",[digest('3')]);
  await assert.rejects(()=>query("select fk_restore($1,'owner@example.com',false,$2,$3,array['cus_other'])",[digest('3'),digest('f'),digest('4')]),/customer mismatch/);
  assert.equal((await query('select used_at from fk_recovery_tokens where token_hash=$1',[digest('3')]))[0].used_at,null);
+});
+
+
+test('one-time snapshots require a valid lease and roll back on a checkout binding mismatch',async()=>{
+ const owner=randomUUID();const data=JSON.stringify([{id:'cs_test_new',price_id:'price_once',payment_intent_id:'pi_new',status:'paid',purchased_at:new Date().toISOString()}]);
+ await assert.rejects(()=>query("select fk_sync_purchases('cus_test',false,'owner@example.com',$1,$2::jsonb)",[owner,data]),/lease expired/);
+ await query('select fk_acquire_lock($1,$2)',['customer:false:cus_test',owner]);
+ try {
+  await assert.rejects(()=>query("select fk_sync_purchases('cus_test',false,'owner@example.com',$1,$2::jsonb,$3,'cs_test_new','evt_new','checkout.session.completed')",[owner,data,randomUUID()]),/binding mismatch/);
+  assert.equal((await query("select * from fk_purchases where id='cs_test_new'")).length,0);
+  assert.equal((await query("select * from fk_webhook_events where id='evt_new'")).length,0);
+  await query("select fk_sync_purchases('cus_test',false,'owner@example.com',$1,$2::jsonb)",[owner,data]);
+  assert.equal((await query("select active from fk_purchase_entitlements where visitor_id=$1",[visitorId]))[0].active,true);
+  await query("select fk_sync_purchases('cus_test',false,'owner@example.com',$1,'[]'::jsonb)",[owner]);
+  assert.equal((await query("select active from fk_purchase_entitlements where visitor_id=$1",[visitorId]))[0].active,false);
+ }finally{await query('select fk_release_lock($1,$2)',['customer:false:cus_test',owner]);}
 });

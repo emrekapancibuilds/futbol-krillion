@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { DayInfo } from '@/lib/game/types.ts';
 export type BillingStatus = { premium: boolean; canManage: boolean; configured: boolean; restoreAvailable: boolean;
-  status: string; paidThrough: string | null; renewsAt: string | null; cancelsAt: string | null };
+  status: string; purchasedAt: string | null };
 let sessionRequest: Promise<BillingStatus> | null = null;
 export function billingSession() {
   if (!sessionRequest) sessionRequest = billingRequest<BillingStatus>('/api/billing/session').finally(() => { sessionRequest = null; });
@@ -16,7 +16,6 @@ export async function billingRequest<T>(url: string, body?: object): Promise<T> 
   if (!response.ok) throw new Error(data.error ?? 'Please try again.');
   return data as T;
 }
-const date = (value: string) => new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 export default function SubscriptionPanel() {
   const router = useRouter();
   const [status, setStatus] = useState<BillingStatus | null>(null);
@@ -47,7 +46,7 @@ export default function SubscriptionPanel() {
   }
   function redirect(endpoint: string) { void run(async () => { const result = await billingRequest<{url:string}>(endpoint, {}); window.location.assign(result.url); }); }
   function play(mode: 'practice' | 'archive', day?: number) {
-    if (!status?.premium) { setMessage('Unlimited unlocks practice and the daily archive for $4.99/month.'); return; }
+    if (!status?.premium) { setMessage('Unlimited unlocks practice and the daily archive for $4.99, paid once.'); return; }
     void run(async () => { if (mode === 'practice') { router.push('/unlimited/play'); return; }
       const next = await billingRequest<DayInfo>('/api/games', {mode, day});
       sessionStorage.setItem('fk:archive', JSON.stringify(next)); router.push('/archive/play'); });
@@ -59,13 +58,17 @@ export default function SubscriptionPanel() {
   return <section className="panel stack subscription" aria-label="Soccer Krillion Unlimited">
     <div className="billing-heading"><strong className="title">UNLIMITED</strong>{status?.premium && <span className="premium-badge">ACTIVE</span>}</div>
     {status?.premium ? <>
-      <p className="muted">{status.renewsAt ? `Renews ${date(status.renewsAt)}` : status.paidThrough ? `Access until ${date(status.paidThrough)}` : 'Unlimited is active.'}</p>
-      {status.status === 'past_due' && <p role="status">Your renewal payment needs attention. Update your payment method in Manage Subscription.</p>}
+      <p className="muted">Unlimited is yours. Play as many sets as you like.</p>
     </> : <>
+      <div className="creator-note">
+        <p>Hey, I&apos;m Emre. I made Futbol Krillion for people who know their football a little too well.</p>
+        <p>Done with the daily? Keep playing, in whichever league or competition you know best. Your purchase also helps me keep building the game.</p>
+        <p>Thanks for playing. — Emre</p>
+      </div>
       <p>Unlimited practice + every previous daily.</p>
-      <p className="price">$4.99 USD / month</p>
-      <p className="muted billing-terms">Renews monthly until canceled. Cancel anytime; keep access through your paid period. Applicable taxes are shown at checkout. No account required.</p>
-      <button className="btn" disabled={busy || loading} onClick={() => redirect('/api/billing/checkout')}>{busy ? 'PLEASE WAIT…' : 'UPGRADE TO UNLIMITED'}</button>
+      <p className="price">$4.99 USD · pay once</p>
+      <p className="muted billing-terms">One payment unlocks Unlimited. No recurring charges. Applicable taxes are shown at checkout. No account required.</p>
+      <button className="btn" disabled={busy || loading} onClick={() => redirect('/api/billing/checkout')}>{busy ? 'PLEASE WAIT…' : 'UNLOCK UNLIMITED — $4.99'}</button>
     </>}
     <div className="billing-actions">
       <button className="btn secondary" disabled={busy} onClick={() => play('practice')}>PRACTICE</button>
@@ -80,7 +83,7 @@ export default function SubscriptionPanel() {
     </div>}
     <div className="billing-links">
       <Link className="linkish" href="/">Today’s free daily</Link>
-      {status?.canManage && <button className="linkish" disabled={busy} onClick={() => redirect('/api/billing/portal')}>Manage Subscription</button>}
+      {status?.canManage && <button className="linkish" disabled={busy} onClick={() => redirect('/api/billing/portal')}>View receipt</button>}
       <button className="linkish" onClick={() => setRestoreOpen(v => !v)} aria-expanded={restoreOpen}>Restore Purchase</button>
       <button className="linkish" disabled={busy} onClick={() => void run(refresh)}>Refresh status</button>
     </div>

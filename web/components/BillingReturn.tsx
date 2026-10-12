@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { billingRequest, type BillingStatus } from './SubscriptionPanel';
 export default function BillingReturn({kind}: {kind:'success'|'cancel'|'restore'}) {
-  const [message,setMessage] = useState(kind === 'success' ? 'Verifying your subscription…' : kind === 'cancel' ? 'Checkout canceled. Your free daily is ready whenever you are.' : 'Verify your email to restore your purchase to this browser.');
+  const [message,setMessage] = useState(kind === 'success' ? 'Verifying your purchase…' : kind === 'cancel' ? 'Checkout canceled. Your free daily is ready whenever you are.' : 'Verify your email to restore your purchase to this browser.');
   const [premium,setPremium] = useState(false);
   const [token,setToken] = useState('');
   const [accessToken,setAccessToken] = useState('');
@@ -33,10 +33,18 @@ export default function BillingReturn({kind}: {kind:'success'|'cancel'|'restore'
         const result = await billingRequest<BillingStatus>('/api/billing/checkout/confirm', {sessionId});
         if (canceled) return;
         setPremium(result.premium);
-        if (result.premium) { setMessage('Unlimited is unlocked. You’re ready to play.'); window.history.replaceState(null,'',window.location.pathname); }
+        if (result.premium) { setMessage('Thank you for supporting the game. Unlimited is unlocked — you’re ready to play.'); window.history.replaceState(null,'',window.location.pathname); }
         else if (++attempts < 8) timeout=setTimeout(verify,2000);
         else setMessage('Your payment is still being confirmed. Return to the game and refresh your status shortly.');
-      } catch(error) { if (!canceled) setMessage(error instanceof Error ? error.message : 'Verification is temporarily unavailable.'); }
+      } catch(error) {
+        if (canceled) return;
+        const detail = error instanceof Error ? error.message : 'Verification is temporarily unavailable.';
+        // Checkout and its webhook can arrive together. Let the customer lock
+        // finish instead of turning that normal race into a failed success page.
+        if (detail.includes('Another request is in progress') && ++attempts < 8) {
+          timeout = setTimeout(verify, 2000);
+        } else setMessage(detail);
+      }
     };
     void verify(); return () => { canceled=true; clearTimeout(timeout); };
   },[kind]);
@@ -50,7 +58,7 @@ export default function BillingReturn({kind}: {kind:'success'|'cancel'|'restore'
   }
   return <main className="shell"><div className="middle"><section className="panel stack">
     <img className="pixel" src="/art/logo.png" alt="Futbol Krillion" style={{width:180,maxWidth:'100%'}} />
-    <h1 className="title">{premium ? 'UNLIMITED ACTIVE' : kind === 'restore' ? 'RESTORE PURCHASE' : kind === 'cancel' ? 'BACK TO THE PITCH' : 'YOUR SUBSCRIPTION'}</h1>
+    <h1 className="title">{premium ? 'UNLIMITED ACTIVE' : kind === 'restore' ? 'RESTORE PURCHASE' : kind === 'cancel' ? 'BACK TO THE PITCH' : 'YOUR PURCHASE'}</h1>
     <p role="status" aria-live="polite">{message}</p>
     {kind === 'restore' && token && accessToken && <button className="btn" disabled={busy} onClick={restore}>{busy ? 'VERIFYING…' : 'RESTORE TO THIS BROWSER'}</button>}
     <Link className="btn billing-back" href={premium ? "/unlimited/play" : "/"}>{premium ? 'PLAY UNLIMITED' : 'RETURN TO THE GAME'}</Link>

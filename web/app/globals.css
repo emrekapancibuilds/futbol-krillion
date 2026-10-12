@@ -402,3 +402,5 @@ a.btn { display: block; text-align: center; text-decoration: none; }
 .legal a { color: var(--cyan); }
 .legal .legal-links { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 footer.small a { color: inherit; }
+
+.creator-note { padding: 16px; border-left: 3px solid var(--accent, #d4ed6e); display: grid; gap: 12px; }
