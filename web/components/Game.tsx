@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { crowdReaction, type Reaction } from "@/lib/crowd-mood.ts";
+import { countdown } from "@/lib/game/countdown.ts";
 import { shareText, streakAfter } from "@/lib/share.ts";
 import { MAX_SCORE, TIER_COLORS, TIERS, tierInfo } from "@/lib/tiers.ts";
 
@@ -514,10 +515,6 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
 function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Result[]; total: number; now: number; onOpen: (i: number) => void }) {
   const [copied, setCopied] = useState(false);
   const streak = store.get<{ last: number; streak: number }>("fk:streak");
-  const left = Math.max(0, new Date(day.nextAt).getTime() - now);
-  const hh = String(Math.floor(left / 3_600_000)).padStart(2, "0");
-  const mm = String(Math.floor((left % 3_600_000) / 60_000)).padStart(2, "0");
-  const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, "0");
   const share = async () => {
     const text = shareText(day.mode === "archive" ? `Archive ${day.number}` : day.number, results.map((r) => r.points), results.map((r) => r.tier), window.location.origin);
     try {
@@ -535,7 +532,7 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
       <Link className="btn secondary" href="/unlimited">KEEP PLAYING</Link>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         {day.mode !== "archive" && <span>Streak: {streak?.streak ?? 1}</span>}
-        <span className="muted">Next daily in {hh}:{mm}:{ss}</span>
+        <span className="muted">Next daily in {countdown(new Date(day.nextAt).getTime() - now)}</span>
       </div>
     </motion.section>
   );

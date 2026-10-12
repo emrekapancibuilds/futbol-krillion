@@ -16,7 +16,7 @@ export async function billingRequest<T>(url: string, body?: object): Promise<T> 
   if (!response.ok) throw new Error(data.error ?? 'Please try again.');
   return data as T;
 }
-export default function SubscriptionPanel() {
+export default function SubscriptionPanel({ onStatus }: { onStatus?: (status: BillingStatus | null) => void } = {}) {
   const router = useRouter();
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [message, setMessage] = useState('');
@@ -31,12 +31,12 @@ export default function SubscriptionPanel() {
     // cannot race with another bootstrap response or an upgrade click.
     if (refreshing.current) return refreshing.current;
     refreshing.current = (async () => {
-      try { setStatus(await billingSession()); }
-      catch { setStatus(null); }
+      try { const next = await billingSession(); setStatus(next); onStatus?.(next); }
+      catch { setStatus(null); onStatus?.(null); }
       finally { setLoading(false); refreshing.current = null; }
     })();
     return refreshing.current;
-  }, []);
+  }, [onStatus]);
   useEffect(() => { void refresh(); window.addEventListener('focus', refresh); return () => window.removeEventListener('focus', refresh); }, [refresh]);
   async function run(action: () => Promise<void>) {
     if (busy) return;
@@ -55,6 +55,14 @@ export default function SubscriptionPanel() {
     event.preventDefault();
     void run(async () => { const result = await billingRequest<{message:string}>('/api/billing/restore/request', {email}); setMessage(result.message); });
   }
+  // Subscribers get yellow PRACTICE / DAILY ARCHIVE so it's obvious they can click them (user, 2026-10-12).
+  const actionClass = status?.premium ? 'btn' : 'btn secondary';
+  // Until the first status check is back, say so and nothing else: showing the pitch meanwhile flashed Emre's note
+  // at players who had already paid (user, 2026-10-12), and the buy button can't race the anonymous bootstrap.
+  if (loading) return <section className="panel stack subscription" aria-label="Soccer Krillion Unlimited" aria-busy="true">
+    <div className="billing-heading"><strong className="title">UNLIMITED</strong></div>
+    <p className="muted" role="status">Checking your Unlimited…</p>
+  </section>;
   return <section className="panel stack subscription" aria-label="Soccer Krillion Unlimited">
     <div className="billing-heading"><strong className="title">UNLIMITED</strong>{status?.premium && <span className="premium-badge">ACTIVE</span>}</div>
     {status?.premium ? <>
@@ -71,8 +79,8 @@ export default function SubscriptionPanel() {
       <button className="btn" disabled={busy || loading} onClick={() => redirect('/api/billing/checkout')}>{busy ? 'PLEASE WAIT…' : 'UNLOCK UNLIMITED — $4.99'}</button>
     </>}
     <div className="billing-actions">
-      <button className="btn secondary" disabled={busy} onClick={() => play('practice')}>PRACTICE</button>
-      <button className="btn secondary" disabled={busy} onClick={() => {
+      <button className={actionClass} disabled={busy} onClick={() => play('practice')}>PRACTICE</button>
+      <button className={actionClass} disabled={busy} onClick={() => {
         if (!status?.premium) { setMessage('Upgrade to Unlimited to open the daily archive.'); return; }
         void run(async () => setArchive((await billingRequest<{days:{number:number;date:string}[]}>('/api/archive')).days));
       }}>DAILY ARCHIVE</button>
