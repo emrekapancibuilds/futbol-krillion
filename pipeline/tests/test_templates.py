@@ -49,10 +49,10 @@ def test_tournaments_honours_and_non_player_families(world):
     assert c["won:premier-league"].facts == {"Q1": "Premier League winner 2013–14"}
     assert c["won:champions-league"].text == "Name a player who won the Champions League (2013)"
     assert set(c["clubs:europe"].facts) == {"Qars", "Qjuv"}
-    assert c["clubs:europe:Italy"].text == "Name a club from Italy that has played in Europe (2012–2026)"
+    assert c["clubs:europe:Italy"].text == "Name a team from Italy that played in Europe (2012–2026)"
     assert c["managers:premier-league"].facts["mgr:arsene wenger"] == "38 Premier League games, 2012–2013"
     assert c["stadiums:cl"].facts["std:emirates stadium"] == "Home of Arsenal F.C. · 200 matches since 2012"
-    assert c["nations:World Cup"].facts == {"Qfra": "1 major tournament since 2010"}
+    assert c["nations:World Cup"].facts == {"Qfra": "1 of 1 World Cups since 2014"}
 
 
 def test_no_generated_text_contains_emoji(world):
@@ -167,3 +167,87 @@ def test_club_champions_league_prompts(world):
     assert (cl.family, cl.category) == ("club_cl", "champions-league")
     assert cl.text == "Name a player who played for Arsenal F.C. in the Champions League (2012–2026)"
     assert cl.facts == {"Q1": "3 Champions League apps for Arsenal F.C., 2012–2013"}
+
+
+# ---- team prompts (user, 2026-10-12): "Name a team that played at the 2014 World Cup" and "...in La Liga"
+
+@pytest.fixture
+def tournaments(world):
+    world.nations = pd.DataFrame({"nation_id": ["Qfra", "Qeng", "Qcur"], "name": ["France", "England", "Curaçao"],
+                                  "sitelinks": [112.0, 109.0, 62.0]}).set_index("nation_id")
+    world.team_editions = pd.DataFrame({
+        "edition": ["2014 World Cup", "2014 World Cup", "2026 World Cup", "2026 World Cup", "2026 World Cup", "Euro 2024"],
+        "kind": ["World Cup"] * 5 + ["Euro"], "label_year": [2014, 2014, 2026, 2026, 2026, 2024],
+        "nation_id": ["Qfra", "Qeng", "Qfra", "Qeng", "Qcur", "Qfra"]})
+    return world
+
+
+def test_one_prompt_per_tournament_asks_for_the_teams_that_played_in_it(tournaments):
+    c = by_key(tournaments)
+    wc14 = c["nations:2014 World Cup"]
+    assert (wc14.family, wc14.entity_type, wc14.category) == ("nations", "nation", "international")
+    assert wc14.text == "Name a team that played at the 2014 World Cup" and set(wc14.facts) == {"Qfra", "Qeng"}
+    assert c["nations:2026 World Cup"].text == "Name a team that played at the 2026 World Cup"
+    assert set(c["nations:2026 World Cup"].facts) == {"Qfra", "Qeng", "Qcur"}          # not in the 2014 data: Curaçao
+    assert c["nations:Euro 2024"].text == "Name a team that played at Euro 2024"
+    assert c["nations:World Cup"].text == "Name a team that played at a World Cup (2014–2026)"
+    assert c["nations:Euro"].text == "Name a team that played at the Euros (2024)"
+
+
+def test_a_team_fact_says_how_many_of_the_tournaments_it_played(tournaments):
+    c = by_key(tournaments)
+    assert c["nations:2026 World Cup"].facts["Qfra"] == "2 of 2 World Cups since 2014"
+    assert c["nations:2026 World Cup"].facts["Qcur"] == "1 of 2 World Cups since 2014"
+    assert c["nations:Euro 2024"].facts["Qfra"] == "1 of 1 Euros since 2024"
+
+
+def test_national_teams_are_ranked_by_appearances_and_attention_inside_the_category(tournaments):
+    scores = by_key(tournaments)["nations:2026 World Cup"].scores
+    assert scores["Qfra"] > scores["Qeng"] > scores["Qcur"]      # more World Cups, then more attention
+
+
+def test_clubs_in_a_league_or_the_champions_league_are_teams_too(world):
+    c = by_key(world)
+    league = c["clubs:premier-league"]
+    assert league.text == "Name a team that played in the Premier League (2012–2026)"
+    assert (league.family, league.entity_type, league.category) == ("clubs", "club", "premier-league")
+    assert set(league.facts) == {"Qars"} and league.facts["Qars"] == "2 Premier League seasons since 2012"
+    cl = c["clubs:champions-league"]
+    assert cl.text == "Name a team that played in the Champions League (2012–2026)"
+    assert (cl.category, cl.mainstream) == ("champions-league", True) and set(cl.facts) == {"Qars"}
+    assert c["clubs:europe"].text == "Name a team that played in a European competition (2012–2026)"
+
+
+def test_a_team_that_misses_world_cups_but_plays_every_euro_still_ranks_as_a_big_team(tournaments):
+    """Italy: 4 World Cup titles but absent from 2018 and 2022. Count whichever tournament a team played more of."""
+    tournaments.nations = pd.DataFrame({"nation_id": ["Qita", "Qgha", "Qfra"], "name": ["Italy", "Ghana", "France"],
+                                        "sitelinks": [100.0, 100.0, 100.0]}).set_index("nation_id")
+    tournaments.team_editions = pd.DataFrame({
+        "edition": ["2014 World Cup", "2014 World Cup", "2018 World Cup", "Euro 2016", "Euro 2020", "Euro 2020"],
+        "kind": ["World Cup"] * 3 + ["Euro"] * 3, "label_year": [2014, 2014, 2018, 2016, 2020, 2020],
+        "nation_id": ["Qita", "Qgha", "Qfra", "Qita", "Qita", "Qfra"]})
+    scores = by_key(tournaments)["nations:2014 World Cup"].scores
+    assert scores["Qita"] > scores["Qgha"]     # Italy: 2 of 2 Euros (1 of 2 World Cups); Ghana: 1 of 2 World Cups, no Euros
+
+
+def test_clubs_are_ranked_by_seasons_in_the_category_and_their_overall_standing(world):
+    """PSG had Champions League football every year and Dortmund most years: seasons count, not just club fame."""
+    world.cl_apps = pd.DataFrame({"player_id": ["Q1"] * 5, "season": [2012.0, 2013.0, 2014.0, 2015.0, 2015.0],
+                                  "club_id": ["Qars", "Qars", "Qars", "Qjuv", "Qbur"], "apps": 1})
+    world.club_prestige = pd.Series({"Qars": 0.5, "Qjuv": 0.5, "Qbur": 0.5})
+    scores = by_key(world)["clubs:champions-league"].scores
+    assert scores["Qars"] > scores["Qjuv"] and scores["Qjuv"] == scores["Qbur"]   # 3 seasons vs 1 each
+    world.club_prestige = pd.Series({"Qars": 0.1, "Qjuv": 0.9, "Qbur": 0.5})
+    scores = by_key(world)["clubs:champions-league"].scores
+    assert scores["Qjuv"] > scores["Qbur"]            # same seasons: the better known club ranks higher
+
+
+def test_champions_league_regulars_outrank_clubs_with_a_better_overall_fame_score(world):
+    """Dortmund (Champions League almost every year) above Eintracht Frankfurt in a Bundesliga ranking."""
+    world.league_apps = pd.DataFrame({"player_id": ["Q1"] * 6, "league_key": ["bundesliga"] * 6, "season": [2012.0] * 3 + [2013.0] * 3,
+                                      "club_id": ["Qars", "Qjuv", "Qbur"] * 2, "apps": 1, "goals": 0})
+    world.cl_apps = pd.DataFrame({"player_id": ["Q1"] * 4, "season": [2012.0, 2013.0, 2014.0, 2015.0],
+                                  "club_id": ["Qars", "Qars", "Qars", "Qars"], "apps": 1})
+    world.club_prestige = pd.Series({"Qars": 0.4, "Qjuv": 0.6, "Qbur": 0.3})     # same league seasons; Qjuv looks bigger
+    scores = by_key(world)["clubs:bundesliga"].scores
+    assert scores["Qars"] > scores["Qjuv"]

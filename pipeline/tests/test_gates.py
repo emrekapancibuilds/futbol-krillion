@@ -31,3 +31,13 @@ def test_scorer_prompts_use_a_lighter_check():
     assert check(famous_heavy, light=True) is None
     assert check([1] * 20 + [4, 4], light=True) == "fewer than 3 answers in tier 4 or above"
     assert check([1] * 4 + [4] * 5, light=True) == "fewer than 5 easy answers"
+
+
+def test_team_prompts_are_checked_against_their_own_cap():
+    from jobless.gates import check_team
+    wc = [1] * 4 + [2] * 6 + [3] * 10 + [4] * 12       # a 32-team World Cup, capped at Season Ticket Holder
+    assert check_team(wc, cap=4) is None                 # no Jobless answer is required
+    assert check_team([1, 2, 3, 4] * 2, cap=4) == "too few teams"
+    assert check_team([4] * 20, cap=4) == "fewer than 5 easy answers"
+    assert check_team([1] * 10 + [2] * 10, cap=4) == "nobody reaches the category's top tier"
+    assert check_team([1] * 8 + [2] * 8, cap=3) == "nobody reaches the category's top tier"

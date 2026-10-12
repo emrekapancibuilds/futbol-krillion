@@ -5,9 +5,10 @@ from collections import Counter
 
 import pandas as pd
 
-from jobless.config import OUT
-from jobless.gates import check, dedupe
+from jobless.config import NATION_DISPLAY, OUT, TEAM_FAMILIES, TEAM_MIN_ANSWERS, TEAM_MIN_FAMOUS
+from jobless.gates import MAX_OVERLAP, check, check_team, dedupe
 from jobless.templates import Candidate, generate, load_world
+from jobless.tiers import team_cap, team_tiers, tier_points
 
 FAMILY_ORDER = ["club", "club_cl", "internationals", "league", "champions", "nation_league", "tournament", "honours", "two_clubs",
                 "club_position", "nation_position", "league_position", "league_scorers", "clubs", "managers", "stadiums",
@@ -22,6 +23,7 @@ DAILY_MIN_ANSWERS = 100
 # answers ('Name a defender who played for Granada') the prompts were far too hard (user, 2026-10-11).
 DAILY_MIN_FAMOUS = 40
 DAILY_DAYS = 365
+TEAM_MAX_OVERLAP = 0.9   # Jaccard above which one team prompt is a copy of another
 SLOT_PER_DAY = {"club_easy": 2, "nation_tournament": 2, "non_player": 1, "hard": 2, "flex": 1}
 UNLIMITED_SHARE = 0.4
 
@@ -35,7 +37,14 @@ def answers_for(c: Candidate, fame: pd.DataFrame) -> pd.DataFrame:
     ids = [i for i in c.facts if i in fame.index]
     a = fame.loc[ids, ["name", "fame", "tier", "points"]].rename_axis("entity_id").reset_index()
     a["fact"] = a["entity_id"].map(c.facts)
-    return a.sort_values("fame", ascending=False).drop_duplicates("name").reset_index(drop=True)
+    a = a.sort_values("fame", ascending=False).drop_duplicates("name").reset_index(drop=True)
+    if c.family in TEAM_FAMILIES and not a.empty:
+        # Teams are tiered against the others in the category and capped by how broad it is (tiers.team_cap), not by
+        # where they sit among every club or nation in the world.
+        scores = pd.Series(c.scores).reindex(a["entity_id"]).fillna(0.0).values if c.scores else a["fame"].values
+        a["tier"] = team_tiers(pd.Series(scores), team_cap(c.entity_type, len(a))).values
+        a["points"] = a["tier"].map(tier_points)
+    return a
 
 
 def assign_slots(prompts: pd.DataFrame) -> pd.Series:
@@ -59,12 +68,13 @@ def assign_pools(prompts: pd.DataFrame, seed: int, pinned=frozenset()) -> pd.Ser
     eligible = pd.Series(True, index=prompts.index)
     if "family" in prompts:
         eligible &= ~prompts["family"].isin(UNLIMITED_ONLY_FAMILIES)
-    if "n_answers" in prompts:
-        eligible &= prompts["n_answers"] >= DAILY_MIN_ANSWERS
+    team = prompts["family"].isin(TEAM_FAMILIES) if "family" in prompts else pd.Series(False, index=prompts.index)
+    if "n_answers" in prompts:      # a World Cup has 32 teams: team prompts are as big as their category gets
+        eligible &= (prompts["n_answers"] >= DAILY_MIN_ANSWERS) | (team & (prompts["n_answers"] >= TEAM_MIN_ANSWERS))
     if "mainstream" in prompts:
         eligible &= prompts["mainstream"].astype(bool)
     if "famous" in prompts:
-        eligible &= prompts["famous"] >= DAILY_MIN_FAMOUS
+        eligible &= (prompts["famous"] >= DAILY_MIN_FAMOUS) | (team & (prompts["famous"] >= TEAM_MIN_FAMOUS))
     pool[is_pinned] = "daily"
     for slot, g in prompts.sample(frac=1, random_state=seed).groupby("slot", sort=False):
         quota = SLOT_PER_DAY.get(slot, 0) * DAILY_DAYS
@@ -80,7 +90,10 @@ def build(candidates: list[Candidate], fame_by_type: dict[str, pd.DataFrame], se
     for c in candidates:
         generated[c.family] += 1
         answers = answers_for(c, fame_by_type[c.entity_type])
-        reason = check(answers["tier"].tolist(), light=c.family in LIGHT_GATE_FAMILIES)
+        if c.family in TEAM_FAMILIES:
+            reason = check_team(answers["tier"].tolist(), team_cap(c.entity_type, len(answers)))
+        else:
+            reason = check(answers["tier"].tolist(), light=c.family in LIGHT_GATE_FAMILIES)
         if reason:
             rejects[(c.family, reason)] += 1
         else:
@@ -96,7 +109,9 @@ def build(candidates: list[Candidate], fame_by_type: dict[str, pd.DataFrame], se
     passed.sort(key=lambda x: (FAMILY_ORDER.index(x[0].family), -len(x[1])))
     keep = set()
     for etype in {c.entity_type for c, _ in passed}:
-        keep |= set(dedupe([(c.key, set(a["entity_id"])) for c, a in passed if c.entity_type == etype]))
+        # Team prompts are small and neighbouring tournaments share most teams (Euro 2020 and 2024): only drop copies.
+        limit = TEAM_MAX_OVERLAP if etype in ("nation", "club") else MAX_OVERLAP
+        keep |= set(dedupe([(c.key, set(a["entity_id"])) for c, a in passed if c.entity_type == etype], limit))
     rows, answer_rows = [], []
     for c, a in passed:
         if c.key not in keep:
@@ -143,7 +158,7 @@ def fame_tables(out=OUT) -> dict[str, pd.DataFrame]:
     names = {
         "player": read("players").set_index("player_id")["name"],
         "club": read("clubs").set_index("club_id")["name"],
-        "nation": read("nations").set_index("nation_id")["name"],
+        "nation": read("nations").set_index("nation_id")["name"].replace(NATION_DISPLAY),
         "manager": read("managers").set_index("manager_id")["name"],
         "stadium": read("stadiums").set_index("stadium_id")["name"],
     }

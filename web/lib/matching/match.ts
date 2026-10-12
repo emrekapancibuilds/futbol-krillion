@@ -113,6 +113,8 @@ export function preparePrompt(answers: Answer[], dropClubWords = false): PromptI
         add(p.full, key, i);
         const last = words[words.length - 1];
         add(p.single, last, i);
+        // Clubs are shortened by their first word ('Bayern', 'Leicester'); people are not ('Gareth'). Always a confirm.
+        if (dropClubWords && words[0].length > 2) add(p.single, words[0], i);
         add(p.full, `${words[0][0]} ${words.slice(1).join(" ")}`, i);
         if (last.length > 3) add(p.phonetic, phonetic(last), i);
       }

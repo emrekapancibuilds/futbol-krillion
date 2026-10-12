@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from jobless.config import EXPORT, OUT, TM_SNAPSHOT
+from jobless.config import CLUB_ALIASES, EXPORT, NATION_ALIASES, NATION_DISPLAY, OUT, TM_SNAPSHOT
 
 ENTITY_FILES = {"player": "fame_players", "club": "fame_clubs", "nation": "fame_nations", "manager": "fame_managers",
                 "stadium": "fame_stadiums"}
@@ -23,6 +23,39 @@ def write_jsonl(path, df: pd.DataFrame) -> int:
     return len(df)
 
 
+def _with_club_nicknames(names: pd.DataFrame, out) -> pd.DataFrame:
+    """Nicknames of well-known clubs ('PSG', 'Man City'), added only to entities that are clubs."""
+    path = out / "clubs.parquet"
+    if not path.exists():
+        return names
+    clubs = set(pd.read_parquet(path, columns=["club_id"])["club_id"])
+    canon = names[(names["kind"] == "canonical") & names["entity_id"].isin(clubs)]
+    extra = [{"entity_id": r.entity_id, "name": a, "kind": "alias"} for r in canon.itertuples()
+             for a in CLUB_ALIASES.get(r.name, [])]
+    return pd.concat([names, pd.DataFrame(extra, columns=["entity_id", "name", "kind"])], ignore_index=True)
+
+
+def _with_country_names(names: pd.DataFrame, out) -> pd.DataFrame:
+    """National teams: fix odd labels ('Canadian' -> 'Canada', which stays typeable) and add the names people type
+    ('USA', 'Holland'), which Wikidata doesn't have for them."""
+    names = _with_club_nicknames(names, out)
+    path = out / "nations.parquet"
+    if not path.exists():
+        return names
+    nations = pd.read_parquet(path)[["nation_id", "name"]]
+    extra = []
+    for r in nations.itertuples():
+        if not isinstance(r.name, str):          # a national team with no label
+            continue
+        shown = NATION_DISPLAY.get(r.name, r.name)
+        if shown != r.name:
+            names = pd.concat([names[~((names["entity_id"] == r.nation_id) & (names["kind"] == "canonical"))],
+                               pd.DataFrame([{"entity_id": r.nation_id, "name": shown, "kind": "canonical"}])], ignore_index=True)
+            extra.append({"entity_id": r.nation_id, "name": r.name, "kind": "alias"})
+        extra += [{"entity_id": r.nation_id, "name": a, "kind": "alias"} for a in NATION_ALIASES.get(shown, [])]
+    return pd.concat([names, pd.DataFrame(extra, columns=["entity_id", "name", "kind"])], ignore_index=True)
+
+
 def export(out=OUT, dest=EXPORT) -> dict[str, int]:
     dest.mkdir(parents=True, exist_ok=True)
     read = lambda name: pd.read_parquet(out / f"{name}.parquet")
@@ -30,6 +63,7 @@ def export(out=OUT, dest=EXPORT) -> dict[str, int]:
                        read("managers").rename(columns={"manager_id": "entity_id"}).assign(kind="canonical"),
                        read("stadiums")[["stadium_id", "name"]].rename(columns={"stadium_id": "entity_id"}).assign(kind="canonical")],
                       ignore_index=True)
+    names = _with_country_names(names, out)
     canonical = names[names["kind"] == "canonical"].drop_duplicates("entity_id").set_index("entity_id")["name"]
     entities = pd.concat([read(f).assign(type=t) for t, f in ENTITY_FILES.items()], ignore_index=True)
     entities["name"] = entities["entity_id"].map(canonical)

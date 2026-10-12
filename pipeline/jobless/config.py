@@ -31,6 +31,86 @@ PLAYER_TIER_RANKS = [300, 1000, 2000, 5000, 12000, 32000]
 # Clubs, nations, managers and stadiums: the upper bound of each tier as a fraction of that type's population.
 TIER_UPPER_FRACTION = [0.006, 0.03, 0.08, 0.18, 0.36, 0.64, 1.0]
 
+# Team categories ("Name a team that played at the 2014 World Cup", "...in La Liga"): the highest tier an answer can
+# reach depends on how broad the category is, and teams are ranked against the others in their own category
+# (user, 2026-10-12). A World Cup field is at most Season Ticket Holder; clubs reach higher than national teams of the
+# same size, being less well known; only the very broad club categories (every club in Europe) reach Jobless.
+# (size limit, cap): the first row whose limit the category's size is below; the last cap applies beyond that.
+TEAM_CAPS = {"nation": [(20, 3), (60, 4), (150, 5)], "club": [(20, 4), (60, 5), (150, 6)]}
+TEAM_CAP_BEYOND = {"nation": 6, "club": 7}
+# Upper bound of each tier, as a fraction of the category, for a category capped at that tier.
+TEAM_TIER_FRACTIONS = {
+    3: [0.15, 0.45, 1.0],
+    4: [0.12, 0.30, 0.60, 1.0],
+    5: [0.08, 0.20, 0.42, 0.72, 1.0],
+    6: [0.05, 0.13, 0.28, 0.50, 0.75, 1.0],
+    7: TIER_UPPER_FRACTION,
+}
+# National teams as Wikidata and Transfermarkt label them, fixed for display, and the other names players type.
+NATION_DISPLAY = {"Canadian": "Canada"}
+NATION_ALIASES = {
+    "United States": ["USA", "US", "United States of America", "America", "USMNT"],
+    "Netherlands": ["Holland", "The Netherlands"],
+    "South Korea": ["Korea", "Korea Republic", "Republic of Korea"],
+    "North Korea": ["Korea DPR", "DPR Korea"],
+    "Ivory Coast": ["Cote d'Ivoire", "Côte d'Ivoire"],
+    "Czechia": ["Czech Republic"],
+    "Turkey": ["Türkiye", "Turkiye"],
+    "Republic of Ireland": ["Ireland", "Eire"],
+    "DR Congo": ["Congo DR", "Democratic Republic of the Congo", "Congo"],
+    "Cape Verde": ["Cabo Verde"],
+    "Bosnia and Herzegovina": ["Bosnia", "Bosnia-Herzegovina", "Bosnia & Herzegovina"],
+    "North Macedonia": ["Macedonia"],
+    "Trinidad and Tobago": ["Trinidad"],
+    "Serbia and Montenegro": ["Serbia & Montenegro", "Yugoslavia"],
+    "Iran": ["IR Iran"],
+    "Saudi Arabia": ["KSA"],
+    "United Arab Emirates": ["UAE"],
+    "China": ["China PR"],
+    "England": ["Three Lions"],
+}
+# Clubs people call by a name that is neither their first nor their last word (those two already work). Keyed by the
+# club's display name in the data; only clubs that are valid answers need to be here.
+CLUB_ALIASES = {
+    "Paris Saint-Germain": ["PSG", "Paris SG", "Paris"],
+    "Manchester City": ["Man City"],
+    "Manchester United": ["Man United", "Man Utd", "Man U"],
+    "Tottenham Hotspur": ["Spurs"],
+    "Wolverhampton Wanderers": ["Wolves"],
+    "Borussia Mönchengladbach": ["Gladbach", "Monchengladbach"],
+    "Borussia Dortmund": ["BVB"],
+    "Bayer 04 Leverkusen": ["Bayer Leverkusen"],
+    "Bayern Munich": ["Bayern München", "FC Bayern Munich"],
+    "Atlético Madrid": ["Atletico", "Atleti"],
+    "Barcelona": ["Barca", "Barça"],
+    "Juventus": ["Juve"],
+    "Inter Milan": ["Inter", "Internazionale"],
+    "AC Milan": ["Milan"],
+    "Brighton & Hove Albion": ["Brighton"],
+    "West Ham United": ["West Ham"],
+    "Newcastle United": ["Newcastle"],
+    "Leeds United": ["Leeds"],
+    "Sheffield United": ["Sheffield Utd"],
+    "Nottingham Forest": ["Forest", "Nottm Forest"],
+    "Real Betis Balompié": ["Betis"],
+    "RCD Espanyol Barcelona": ["Espanyol"],
+    "Olympique Marseille": ["Marseille", "OM"],
+    "Olympique Lyon": ["Lyon", "OL"],
+    "SSC Napoli": ["Napoli"],
+    "SS Lazio": ["Lazio"],
+    "AS Roma": ["Roma"],
+    "SL Benfica": ["Benfica"],
+    "Sporting CP": ["Sporting Lisbon", "Sporting"],
+    "Red Bull Salzburg": ["Salzburg"],
+    "PFK CSKA Moskva": ["CSKA Moscow", "CSKA"],
+    "Beşiktaş J.K.": ["Besiktas"],
+    "RB Leipzig": ["Leipzig", "RBL"],
+    "Hamburger SV": ["Hamburg", "HSV"],
+}
+TEAM_FAMILIES = {"nations", "clubs"}   # prompt families whose answers are teams (entity types nation and club)
+TEAM_MIN_ANSWERS = 12                  # smaller categories aren't a prompt
+TEAM_MIN_FAMOUS = 8                    # answers a casual fan could name (tiers 1-3) for a team prompt to go out free
+
 
 class League(NamedTuple):
     name: str     # display name

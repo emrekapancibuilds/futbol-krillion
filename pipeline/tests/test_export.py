@@ -39,3 +39,53 @@ def test_export_writes_every_file_and_meta(tmp_path):
     assert first["name"] == "Thierry Henry"
     prompt = json.loads((dest / "prompts.jsonl").read_text().splitlines()[0])
     assert (prompt["famous"], prompt["mainstream"]) == (1, True)     # the web export filters Unlimited on these
+
+
+def test_countries_get_the_names_people_type_and_fix_odd_labels(tmp_path):
+    """Wikidata labels the Canadian team 'Canadian' and has no 'USA' or 'Holland'; players type those."""
+    out, dest = tmp_path / "out", tmp_path / "export"
+    out.mkdir()
+    pd.DataFrame({"entity_id": ["Qus", "Qca", "Qnl"], "name": ["United States", "Canadian", "Netherlands"],
+                  "kind": ["canonical"] * 3}).to_parquet(out / "names.parquet")
+    pd.DataFrame({"manager_id": ["mgr:x"], "name": ["X"]}).to_parquet(out / "managers.parquet")
+    pd.DataFrame({"stadium_id": ["std:y"], "name": ["Y"]}).to_parquet(out / "stadiums.parquet")
+    pd.DataFrame({"nation_id": ["Qus", "Qca", "Qnl", "Qnone"], "name": pd.array(["United States", "Canadian", "Netherlands", None],
+                                                                              dtype="string")}).to_parquet(out / "nations.parquet")
+    for t, f in export.ENTITY_FILES.items():
+        ids = ["Qus", "Qca", "Qnl"] if t == "nation" else ["Qx"]
+        pd.DataFrame({"entity_id": ids, "fame": [0.9] * len(ids), "fame_rank": 1, "tier": 1, "points": 10,
+                      "prestige": 1.0}).to_parquet(out / f"{f}.parquet")
+    pd.DataFrame({"prompt_id": ["p"], "key": ["nations:2014 World Cup"], "family": ["nations"], "entity_type": ["nation"],
+                  "text": ["t"], "pool": ["daily"], "slot": ["non_player"], "ease": [1.0], "n_answers": [3], "famous": [3],
+                  "mainstream": [True], "category": ["international"]}).to_parquet(out / "prompts.parquet")
+    pd.DataFrame({"prompt_id": ["p"] * 3, "entity_id": ["Qus", "Qca", "Qnl"], "name": ["a", "b", "c"], "tier": 1,
+                  "points": 10, "fact": "f"}).to_parquet(out / "prompt_answers.parquet")
+    export.export(out, dest)
+    rows = [json.loads(line) for line in (dest / "entities.jsonl").read_text().splitlines()]
+    assert {r["name"] for r in rows if r["type"] == "nation"} == {"United States", "Canada", "Netherlands"}
+    names = [json.loads(line) for line in (dest / "entity_names.jsonl").read_text().splitlines()]
+    aliases = {(n["entity_id"], n["name"]) for n in names if n["kind"] == "alias"}
+    assert {("Qus", "USA"), ("Qus", "United States of America"), ("Qnl", "Holland"), ("Qca", "Canadian")} <= aliases
+
+
+def test_well_known_clubs_get_their_nicknames_but_only_clubs_do(tmp_path):
+    out, dest = tmp_path / "out", tmp_path / "export"
+    out.mkdir()
+    pd.DataFrame({"entity_id": ["Qpsg", "Qmc", "Qplayer"], "name": ["Paris Saint-Germain", "Manchester City", "Manchester City"],
+                  "kind": ["canonical"] * 3}).to_parquet(out / "names.parquet")        # a player who shares a club's name
+    pd.DataFrame({"manager_id": ["mgr:x"], "name": ["X"]}).to_parquet(out / "managers.parquet")
+    pd.DataFrame({"stadium_id": ["std:y"], "name": ["Y"]}).to_parquet(out / "stadiums.parquet")
+    pd.DataFrame({"club_id": ["Qpsg", "Qmc"], "name": ["Paris Saint-Germain", "Manchester City"]}).to_parquet(out / "clubs.parquet")
+    for t, f in export.ENTITY_FILES.items():
+        pd.DataFrame({"entity_id": ["Qx"], "fame": [0.9], "fame_rank": 1, "tier": 1, "points": 10,
+                      "prestige": 1.0}).to_parquet(out / f"{f}.parquet")
+    pd.DataFrame({"prompt_id": ["p"], "key": ["k"], "family": ["clubs"], "entity_type": ["club"], "text": ["t"], "pool": ["daily"],
+                  "slot": ["non_player"], "ease": [1.0], "n_answers": [1], "famous": [1], "mainstream": [True],
+                  "category": [None]}).to_parquet(out / "prompts.parquet")
+    pd.DataFrame({"prompt_id": ["p"], "entity_id": ["Qpsg"], "name": ["a"], "tier": 1, "points": 10, "fact": "f"}).to_parquet(
+        out / "prompt_answers.parquet")
+    export.export(out, dest)
+    aliases = {(n["entity_id"], n["name"]) for n in map(json.loads, (dest / "entity_names.jsonl").read_text().splitlines())
+               if n["kind"] == "alias"}
+    assert {("Qpsg", "PSG"), ("Qmc", "Man City")} <= aliases
+    assert ("Qplayer", "Man City") not in aliases

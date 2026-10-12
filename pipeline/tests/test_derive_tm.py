@@ -81,3 +81,22 @@ def test_managers_and_stadiums(world):
 
 def test_euro_clubs(world):
     assert set(world["euro_clubs"]["club_id"]) == {"Qa", "Qb"}
+
+
+def test_team_editions_list_who_played_each_complete_tournament(world):
+    te = world["team_editions"]
+    assert sorted(te["edition"].unique()) == ["2014 World Cup", "Euro 2020"]      # the 40-game partial one has 2 teams
+    assert sorted(te.loc[te["edition"] == "2014 World Cup", "nation_id"]) == ["Qn1", "Qn2"]
+
+
+def test_a_tournament_still_being_played_counts_once_every_team_is_known():
+    """The 2026 World Cup has no final in the data yet, but its group stage names all 48 teams (the stage
+    nation_tournaments needs a final for, because scorers and rosters aren't complete until then)."""
+    teams = [f"T{i}" for i in range(48)]
+    groups = [game(f"G{i}", "FIWC", 2025, teams[i], teams[(i + 1) % 48], 1, 0, date="2026-06-15") for i in range(48)]
+    short = [game(f"S{i}", "FIWC", 2021, teams[i], teams[(i + 1) % 20], 1, 0, date="2022-11-25") for i in range(20)]
+    games = pd.DataFrame(groups + short)
+    nation_for_tm = pd.Series({t: f"Q{t}" for t in teams})
+    te = d.team_editions(games, nation_for_tm)
+    assert te["edition"].unique().tolist() == ["2026 World Cup"]                  # 20 teams of 32: not known yet
+    assert te["nation_id"].nunique() == 48

@@ -129,3 +129,68 @@ def test_prompts_keep_their_category():
     prompts, _, _, _ = b.build([Candidate("league:x", "league", "player", "Name a player in X", {i: "f" for i in fame.index},
                                           category="premier-league")], {"player": fame})
     assert prompts.loc[0, "category"] == "premier-league"
+
+
+# ---- team prompts (user, 2026-10-12)
+
+def teams(n, entity_type="nation", prefix="t"):
+    """n teams whose global fame says they're all unknown (tier 7), so only the within-category ranking can tier them."""
+    ids = [f"{prefix}{i}" for i in range(n)]
+    fame = pd.DataFrame({"name": [f"Team {i}" for i in ids], "fame": [0.5 - i / 1000 for i in range(n)],
+                         "tier": 7, "points": 1000}, index=ids)
+    return ids, fame
+
+
+def test_a_world_cup_field_is_tiered_inside_the_category_and_capped_at_season_ticket_holder():
+    ids, fame = teams(48)                                           # the 2026 World Cup
+    scores = {i: 100 - n for n, i in enumerate(ids)}                # t0 is the best known, t47 the least
+    c = Candidate("nations:2026 World Cup", "nations", "nation", "Name a team that played at the 2026 World Cup",
+                  {i: "f" for i in ids}, scores=scores)
+    prompts, answers, _, rejects = b.build([c], {"nation": fame})
+    assert prompts["key"].tolist() == ["nations:2026 World Cup"] and not rejects
+    tier = answers.set_index("entity_id")["tier"]
+    assert tier["t0"] == 1 and tier["t47"] == 4 and tier.max() == 4          # Curaçao-level: Season Ticket Holder, never Jobless
+    assert answers.set_index("entity_id").loc["t47", "points"] == 160
+
+
+def test_a_league_of_clubs_can_reach_true_analyst_but_not_further():
+    ids, fame = teams(33, "club", "c")
+    c = Candidate("clubs:la-liga", "clubs", "club", "Name a team that played in La Liga (2012–2026)", {i: "f" for i in ids})
+    _, answers, _, _ = b.build([c], {"club": fame})
+    assert answers["tier"].max() == 5 and answers.loc[answers["tier"] == 5, "points"].iloc[0] == 320
+
+
+def test_a_category_covering_every_club_in_europe_can_have_jobless_answers():
+    ids, fame = teams(659, "club", "c")
+    c = Candidate("clubs:europe", "clubs", "club", "Name a team that played in a European competition (2012–2026)",
+                  {i: "f" for i in ids})
+    _, answers, _, _ = b.build([c], {"club": fame})
+    assert answers["tier"].max() == 7
+
+
+def test_tiny_team_categories_are_rejected():
+    ids, fame = teams(8)
+    c = Candidate("nations:Euro 2008", "nations", "nation", "Name a team that played at Euro 2008", {i: "f" for i in ids})
+    prompts, _, _, rejects = b.build([c], {"nation": fame})
+    assert prompts.empty and rejects[("nations", "too few teams")] == 1
+
+
+def test_team_prompts_can_be_dailies_with_only_a_few_dozen_answers_but_niche_ones_cannot():
+    prompts = pd.DataFrame({
+        "slot": ["non_player"] * 7, "prompt_id": [f"p{i}" for i in range(7)],
+        "family": ["nations"] * 3 + ["clubs"] * 3 + ["managers"],
+        "n_answers": [32, 48, 24, 33, 37, 8, 40], "famous": [20, 20, 12, 14, 14, 5, 20],
+        "mainstream": [True] * 7}, index=range(7))
+    daily = b.assign_pools(prompts, seed=1) == "daily"
+    assert daily.sum() == 3                         # 5 team prompts are big enough; 40% of them stay for Unlimited
+    assert not daily[5] and not daily[6]            # 8 teams is too small; a manager prompt still needs 100 answers
+
+
+def test_tournament_editions_with_nearly_the_same_teams_are_all_kept():
+    """Euro 2016, 2020 and 2024 share most of their 24 teams, but they are different questions."""
+    ids, fame = teams(30)
+    cands = [Candidate(f"nations:Euro {y}", "nations", "nation", f"Name a team that played at Euro {y}",
+                       {i: "f" for i in ids[a:a + 24]}, scores={i: 100 - n for n, i in enumerate(ids)})
+             for y, a in ((2016, 0), (2020, 2), (2024, 4))]               # 20 of 24 teams in common (Jaccard 0.71)
+    prompts, _, _, rejects = b.build(cands, {"nation": fame})
+    assert len(prompts) == 3 and not rejects

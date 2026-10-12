@@ -163,3 +163,35 @@ def test_unlimited_lists_what_each_prompt_is_about(tmp_path):
     subjects = json.loads((tmp_path / "web" / "unlimited.json").read_text())["subjects"]
     assert subjects["p1"] == subjects["p2"] == subjects["p3"] == "club:Q64"
     assert (subjects["p4"], subjects["p5"], subjects["p6"]) == ("league:bundesliga", "nation:Q43310", "tournament")
+
+
+def test_team_prompts_reach_free_unlimited_with_fewer_famous_answers(tmp_path):
+    """A league has about 35 clubs, so a team prompt can't have the 30 famous answers a player prompt does."""
+    make_export(tmp_path / "export")
+    d = tmp_path / "export"
+    rows = [json.loads(l) for l in (d / "prompts.jsonl").read_text().splitlines()]
+    rows += [{"prompt_id": "pLiga", "family": "clubs", "entity_type": "club", "text": "Name a team that played in La Liga",
+              "pool": "unlimited", "slot": "non_player", "ease": 0.4, "n_answers": 33, "famous": 14, "mainstream": True,
+              "category": "la-liga"},
+             {"prompt_id": "pTiny", "family": "clubs", "entity_type": "club", "text": "Name a team from Malta",
+              "pool": "unlimited", "slot": "non_player", "ease": 0.4, "n_answers": 9, "famous": 3, "mainstream": True,
+              "category": "la-liga"},
+             {"prompt_id": "pPlayer", "family": "club", "entity_type": "player", "text": "Name a Burnley player",
+              "pool": "unlimited", "slot": "flex", "ease": 0.4, "n_answers": 99, "famous": 14, "mainstream": True,
+              "category": "premier-league"}]
+    write_jsonl(d / "prompts.jsonl", rows)
+    answers = [json.loads(l) for l in (d / "prompt_answers.jsonl").read_text().splitlines()]
+    answers += [{"prompt_id": p, "entity_id": "Qc", "tier": 1, "points": 10, "fact": "x"} for p in ("pLiga", "pTiny", "pPlayer")]
+    write_jsonl(d / "prompt_answers.jsonl", answers)
+    webdata.build(d, tmp_path / "web")
+    assert json.loads((tmp_path / "web" / "unlimited.json").read_text())["all"] == ["pLiga"]
+
+
+def test_the_fallback_pool_is_the_scheduled_prompts_so_it_never_points_at_a_missing_file(tmp_path):
+    """After the published schedule ends, the site fills days from web/data/fallback-prompts.json: every id in it
+    must have an answer file, or a rebuild that drops old prompts breaks the daily."""
+    make_export(tmp_path / "export")
+    webdata.build(tmp_path / "export", tmp_path / "web")
+    pool = json.loads((tmp_path / "web" / "fallback-prompts.json").read_text())
+    assert pool == ["pA"]                                            # scheduled twice, listed once
+    assert all((tmp_path / "web" / "prompts" / f"{p}.json").exists() for p in pool)
