@@ -404,3 +404,16 @@ a.btn { display: block; text-align: center; text-decoration: none; }
 footer.small a { color: inherit; }
 
 .creator-note { padding: 16px; border-left: 3px solid var(--accent, #d4ed6e); display: grid; gap: 12px; }
+
+/* Today's daily card on /unlimited for subscribers (components/DailyCountdown.tsx). */
+.daily-countdown p { margin: 0; }
+.daily-countdown .countdown-line { color: var(--muted); }
+.daily-countdown .countdown {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-display), monospace;
+  font-size: 40px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
