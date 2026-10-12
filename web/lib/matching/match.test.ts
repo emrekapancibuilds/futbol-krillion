@@ -103,3 +103,37 @@ test("but a half-typed name is never filled in", () => {
   assert.equal(more("Wijnal"), null);
   assert.equal(more("Gareth"), null);            // a first name alone is not the player
 });
+
+// ---- team prompts: players type clubs as answers, and usually by the first word ("Bayern", "Leicester")
+
+const CLUBS = preparePrompt([
+  a("bayern", "Bayern Munich", 1, ["Bayern Munich", "Bayern München"]),
+  a("leicester", "Leicester City", 2),
+  a("psg", "Paris Saint-Germain", 2, ["Paris Saint-Germain", "PSG"]),
+  a("real", "Real Madrid", 1), a("betis", "Real Betis Balompié", 4),
+  a("dortmund", "Borussia Dortmund", 2),
+], true);
+const CLUB_GLOBAL = prepareGlobal([["bayern", "Bayern Munich"], ["leicester", "Leicester City"], ["psg", "Paris Saint-Germain"],
+                                   ["real", "Real Madrid"], ["betis", "Real Betis Balompié"], ["dortmund", "Borussia Dortmund"],
+                                   ["hendry", "Colin Hendry"]]);
+const club = (input: string) => matchDetail(input, CLUBS, CLUB_GLOBAL, true);
+
+test("a club is suggested from its first word, as most clubs are shortened", () => {
+  assert.deepEqual([club("Bayern")?.answer.id, club("Bayern")?.exact], ["bayern", false]);       // confirm, never silent
+  assert.equal(club("Leicester")?.answer.id, "leicester");
+  assert.equal(club("Dortmund")?.answer.id, "dortmund");                                         // last word still works
+  assert.equal(club("Real")?.answer.id, "real");                                                 // shared first word: the better known club
+  assert.deepEqual([club("PSG")?.answer.id, club("PSG")?.exact], ["psg", true]);                 // an alias is exact
+  assert.equal(club("Borussia")?.answer.id, "dortmund");
+});
+
+test("a first name is not a surname: player prompts never match on the first word", () => {
+  const players = preparePrompt([a("bale", "Gareth Bale", 1), a("henry", "Thierry Henry", 1)]);
+  assert.equal(matchDetail("Gareth", players, GLOBAL)?.answer.id ?? null, null);
+  assert.equal(matchDetail("Bale", players, GLOBAL)?.answer.id, "bale");
+});
+
+test("a half-typed club name is still not completed", () => {
+  assert.equal(club("Leices"), null);
+  assert.equal(club("Bay"), null);
+});

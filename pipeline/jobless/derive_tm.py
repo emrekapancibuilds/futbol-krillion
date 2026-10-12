@@ -73,6 +73,35 @@ def editions(games):
     return ed[["competition_id", "season", "kind", "year", "label_year", "edition"]]
 
 
+FIELD_SIZE = {"World Cup": [(2026, 48), (0, 32)], "Euro": [(2016, 24), (0, 16)]}   # teams at the finals, from that year on
+
+
+def _field_size(kind: str, year: int) -> int:
+    return next(n for from_year, n in FIELD_SIZE[kind] if year >= from_year)
+
+
+def team_editions(games, nation_for_tm):
+    """Which national teams played each World Cup / Euro: complete tournaments, plus any still being played whose
+    teams are all known (a final isn't needed to know who took part: the 2026 World Cup, for 'Name a team that
+    played at...'). Columns: edition, kind, label_year, nation_id."""
+    g = games[games["competition_id"].isin(TOURNAMENTS)].copy()
+    g["yr"] = g["date"].str[:4].astype(int)
+    g["is_final"] = g["round"].str.lower().eq("final")
+    rows = []
+    for (comp, season), t in g.groupby(["competition_id", "season"]):
+        kind, year = TOURNAMENTS[comp], int(t["yr"].min())
+        teams = set(t["home_club_id"]) | set(t["away_club_id"])
+        complete = t["is_final"].any() and len(t) >= MIN_TOURNAMENT_GAMES
+        if not complete and len(teams) < _field_size(kind, year):
+            continue
+        label = 2020 if (kind == "Euro" and year == 2021) else year             # Euro 2020 ran in 2021
+        edition = f"{label} World Cup" if kind == "World Cup" else f"Euro {label}"
+        rows += [{"edition": edition, "kind": kind, "label_year": label, "tm": tm} for tm in sorted(teams)]
+    out = pd.DataFrame(rows, columns=["edition", "kind", "label_year", "tm"])
+    out["nation_id"] = out["tm"].map(nation_for_tm)
+    return out.dropna(subset=["nation_id"]).drop(columns="tm").drop_duplicates().reset_index(drop=True)
+
+
 def tournament_apps(events, games, eds, pid_for_tm, nation_for_tm):
     """Per player, edition and nation: games with any event (goal, card, sub on or off) and goals scored.
 
@@ -144,6 +173,7 @@ def derive(games, appearances, events, tm_to_club, pid_for_tm, nation_for_tm) ->
     return {"league_apps": league_apps(a), "cl_apps": cl_apps(a), "champions": champions(games, tm_to_club),
             "editions": eds, "tournament_apps": tournament_apps(events, games, eds, pid_for_tm, nation_for_tm),
             "nation_tournaments": nation_tournaments(games, eds, nation_for_tm),
+            "team_editions": team_editions(games, nation_for_tm),
             "manager_spells": spells, "managers": manager_names, "stadiums": stadium_table,
             "stadium_games": stadium_games, "euro_clubs": euro_clubs(games, tm_to_club)}
 

@@ -97,6 +97,12 @@ def stadium_line(games, home_club) -> str:
     return f"Home of {home_club} · {base}" if isinstance(home_club, str) else base
 
 
+def team_tournament_line(n, total, kind: str, first_year) -> str:
+    """'4 of 6 World Cups since 2006': how many of the tournaments in the data a national team played."""
+    plural = "World Cups" if kind == "World Cup" else "Euros"
+    return f"{int(n)} of {int(total)} {plural} since {int(first_year)}"
+
+
 def nation_line(n) -> str:
     n = int(n)
     return f"{n} major tournament{'s' if n != 1 else ''} since 2010"

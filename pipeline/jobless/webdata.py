@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from jobless.config import EXPORT, ROOT
+from jobless.config import EXPORT, ROOT, TEAM_FAMILIES, TEAM_MIN_FAMOUS
 
 WEB_DATA = ROOT.parent / "web" / "data"
 # Unlimited is free for now; shipping all ~1,000 Unlimited prompts would add ~48 MB, so a fixed slice goes out.
@@ -57,10 +57,16 @@ def build(export: Path = EXPORT, dest: Path = WEB_DATA) -> dict:
     days = [{"number": int(n), "date": str(g["air_date"].iloc[0])[:10], "prompts": list(g["prompt_id"])}
             for n, g in schedule.groupby("daily_number", sort=True)]
     _write(dest / "days.json", days)
+    # After the last scheduled day the site fills days from this pool (web/lib/game/schedule.ts): the scheduled
+    # prompts, so every id in it always has an answer file.
+    _write(dest / "fallback-prompts.json", list(dict.fromkeys(schedule["prompt_id"])))
 
     variants = names.drop_duplicates(["entity_id", "name"]).groupby("entity_id", sort=False)["name"].agg(list)
     scheduled = list(dict.fromkeys(schedule["prompt_id"]))
-    easy = prompts["famous"] >= UNLIMITED_MIN_FAMOUS if "famous" in prompts else True
+    # Team prompts (a league's clubs, a World Cup's teams) are as big as their category: about 35 answers, not 100s.
+    team = prompts["family"].isin(TEAM_FAMILIES) if "family" in prompts else False
+    easy = ((prompts["famous"] >= UNLIMITED_MIN_FAMOUS) | (team & (prompts["famous"] >= TEAM_MIN_FAMOUS))
+            if "famous" in prompts else True)
     if "mainstream" in prompts:
         easy &= prompts["mainstream"].fillna(False).astype(bool)
     pool = prompts.index[(prompts["pool"] == "unlimited") & easy].difference(scheduled)

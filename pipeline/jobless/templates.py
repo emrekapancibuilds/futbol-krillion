@@ -30,6 +30,7 @@ class Candidate:
     facts: dict[str, str]  # answer entity id -> fact line
     mainstream: bool = True  # fit for the free daily (top 5 leagues); False = Unlimited only
     category: str | None = None  # Unlimited round type: a top-5 league key, "champions-league" or "international"
+    scores: dict[str, float] | None = None  # team prompts: how well known each team is, to rank them inside the category
 
 
 @dataclass
@@ -51,6 +52,7 @@ class World:
     club_prestige: pd.Series
     top5_clubs: frozenset | None = None   # filled on first use by _top5
     club_league: dict | None = None       # club -> the top-5 league it spent most seasons in; filled by _club_league
+    team_editions: pd.DataFrame | None = None   # who played each World Cup / Euro, including one still being played
 
     def player_fact(self, pid: str) -> str:
         p = self.players.loc[pid]
@@ -66,7 +68,8 @@ def load_world(out=OUT) -> World:
                  tournament_apps=read("tournament_apps"), nation_tournaments=read("nation_tournaments"),
                  manager_spells=read("manager_spells"), stadiums=read("stadiums").set_index("stadium_id"),
                  stadium_games=read("stadium_games"), editions=read("editions"), euro_clubs=read("euro_clubs"),
-                 club_prestige=read("fame_clubs").set_index("entity_id")["prestige"])
+                 club_prestige=read("fame_clubs").set_index("entity_id")["prestige"],
+                 team_editions=read("team_editions") if (out / "team_editions.parquet").exists() else None)
 
 
 def in_era(stints: pd.DataFrame, lo, hi) -> pd.Series:
@@ -107,7 +110,7 @@ def category_of(w: World, c: Candidate) -> str | None:
     first = rest.split(":")[0]
     if kind in ("club", "clubpos"):
         return _club_league(w, first)
-    if kind in ("clubcl", "champions") or c.key in ("won:champions-league", "stadiums:cl"):
+    if kind in ("clubcl", "champions") or c.key in ("won:champions-league", "stadiums:cl", "clubs:champions-league"):
         return "champions-league"
     if kind in ("intl", "natpos", "scored", "nations") or c.key == "stadiums:tournaments":
         return "international"
@@ -320,22 +323,41 @@ def honours_prompts(w: World):
                         {pid: facts.title_line("Champions League", s) for pid, s in first.items()})
 
 
+def _club_scores(w: World, seasons: pd.Series) -> dict[str, float]:
+    """How well known clubs are, for ranking them inside one team prompt: seasons spent in the category (every year
+    in the Champions League beats an occasional visit), Champions League history (the clearest sign of a big club),
+    and overall standing, equally weighted."""
+    prestige = w.club_prestige.reindex(seasons.index).fillna(0)
+    cl = (w.cl_apps.groupby("club_id")["season"].nunique() if not w.cl_apps.empty else pd.Series(dtype=float))
+    cl = cl.reindex(seasons.index).fillna(0)
+    return ((seasons.rank(pct=True) + cl.rank(pct=True) + prestige.rank(pct=True)) / 3 + prestige / 1e3).to_dict()
+
+
 def club_family_prompts(w: World):
+    """Teams: 'Name a team that played in La Liga'. Ranked against the other teams of the category (tiers.team_cap)."""
     for league_key, g in w.league_apps.groupby("league_key"):
         league = LEAGUES[league_key]
         seasons = g.groupby("club_id")["season"].nunique()
-        yield Candidate(f"clubs:{league_key}", "clubs", "club", f"Name a club that has played in {league.phrase}{TM_ERA}",
-                        {cid: facts.seasons_line(n, league.name) for cid, n in seasons.items()}, league_key in TOP5)
+        yield Candidate(f"clubs:{league_key}", "clubs", "club", f"Name a team that played in {league.phrase}{TM_ERA}",
+                        {cid: facts.seasons_line(n, league.name) for cid, n in seasons.items()}, league_key in TOP5,
+                        scores=_club_scores(w, seasons))
+    if not w.cl_apps.empty:
+        seasons = w.cl_apps.groupby("club_id")["season"].nunique()
+        yield Candidate("clubs:champions-league", "clubs", "club", f"Name a team that played in the Champions League{TM_ERA}",
+                        {cid: facts.seasons_line(n, "Champions League") for cid, n in seasons.items()},
+                        scores=_club_scores(w, seasons))
     clubs = w.euro_clubs["club_id"].drop_duplicates()
+    euro_seasons = w.euro_clubs.drop_duplicates(["club_id", "season"]).groupby("club_id").size()
     league_name = lambda cid: LEAGUES[w.clubs["league_key"].get(cid)].name if w.clubs["league_key"].get(cid) in LEAGUES else None
     lines = {cid: facts.club_line(league_name(cid), w.clubs["country"].get(cid)) or "European competition since 2012"
              for cid in clubs}
-    yield Candidate("clubs:europe", "clubs", "club", f"Name a club that has played in a European competition{TM_ERA}", lines)
+    yield Candidate("clubs:europe", "clubs", "club", f"Name a team that played in a European competition{TM_ERA}", lines,
+                    scores=_club_scores(w, euro_seasons))
     countries = clubs.map(w.clubs["country"])
     for country, ids in clubs.groupby(countries):
         yield Candidate(f"clubs:europe:{country}", "clubs", "club",
-                        f"Name a club from {country} that has played in Europe{TM_ERA}", {cid: lines[cid] for cid in ids},
-                        False)
+                        f"Name a team from {country} that played in Europe{TM_ERA}", {cid: lines[cid] for cid in ids},
+                        False, scores=_club_scores(w, euro_seasons.reindex(ids).fillna(0)))
 
 
 def manager_prompts(w: World):
@@ -362,15 +384,43 @@ def stadium_prompts(w: World):
                         lines(tour["stadium_id"].unique()))
 
 
+def _team_editions(w: World) -> pd.DataFrame:
+    return w.team_editions if w.team_editions is not None else w.nation_tournaments
+
+
+def _nation_scores(w: World, ids, kind: str | None = None) -> dict[str, float]:
+    """How well known national teams are, for ranking them inside one tournament prompt: half the share of the
+    tournaments they played (World Cups or Euros, whichever they played more of), half their Wikipedia attention.
+    Nation fame itself is built for ranking all 300+ nations and is shared with player fame, so it is left alone."""
+    te = _team_editions(w)
+    total = te.groupby("kind")["edition"].nunique()
+    played = te.groupby(["nation_id", "kind"])["edition"].nunique().unstack(fill_value=0)
+    kinds = [k for k in ([kind] if kind else list(total.index)) if k in played]
+    ids = list(ids)
+    share = pd.concat([played.reindex(ids).fillna(0)[k] / total[k] for k in kinds], axis=1).max(axis=1)
+    links = (pd.to_numeric(w.nations["sitelinks"], errors="coerce") if "sitelinks" in w.nations else
+             pd.Series(0.0, index=w.nations.index)).reindex(ids).fillna(0)
+    return (0.5 * share.rank(pct=True) + 0.5 * links.rank(pct=True) + links / 1e6).to_dict()
+
+
 def nation_prompts(w: World):
+    """Teams: 'Name a team that played at the 2014 World Cup', one prompt per tournament and one over all of them."""
+    te = _team_editions(w)
     for kind, label in (("World Cup", "a World Cup"), ("Euro", "the Euros")):
-        g = w.nation_tournaments[w.nation_tournaments["kind"] == kind]
+        g = te[te["kind"] == kind]
         if g.empty:
             continue
+        total, first = g["edition"].nunique(), int(g["label_year"].min())
         counts = g.groupby("nation_id")["edition"].nunique()
-        span = facts.span(g["label_year"].min(), g["label_year"].max())
-        yield Candidate(f"nations:{kind}", "nations", "nation", f"Name a country that played at {label}{span}",
-                        {nid: facts.nation_line(n) for nid, n in counts.items()})
+        line = lambda n, kind=kind, total=total, first=first: facts.team_tournament_line(n, total, kind, first)
+        yield Candidate(f"nations:{kind}", "nations", "nation",
+                        f"Name a team that played at {label}{facts.span(first, g['label_year'].max())}",
+                        {nid: line(n) for nid, n in counts.items()}, scores=_nation_scores(w, counts.index))
+        for edition, ge in g.groupby("edition"):
+            at = edition if edition.startswith("Euro") else f"the {edition}"       # 'at Euro 2024', 'at the 2014 World Cup'
+            ids = ge["nation_id"].unique()
+            yield Candidate(f"nations:{edition}", "nations", "nation", f"Name a team that played at {at}",
+                            {nid: line(counts[nid]) for nid in ids}, scores=_nation_scores(w, ids))
 
 
 FAMILIES = [club_prompts, club_position_prompts, two_club_prompts, nation_league_prompts, tournament_prompts,
