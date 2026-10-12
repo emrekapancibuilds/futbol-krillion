@@ -18,7 +18,8 @@ export async function POST(req: Request) {
                                      expand: ["data.payment_intent.latest_charge"] })).data);
     if (!hit) return json({ error: "We couldn't find an Unlimited purchase for that email." }, 404);
     return json({ unlock: unlockToken(hit.id, gameSecret()) });
-  } catch {
+  } catch (e) {
+    console.error("restore_lookup_failed", e instanceof Error ? e.message : e);   // Stripe's message only, never the key
     return json(UNREACHABLE, 502);
   }
 }

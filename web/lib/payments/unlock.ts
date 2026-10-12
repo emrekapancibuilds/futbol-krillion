@@ -57,3 +57,22 @@ export function stripeKey(key: string | undefined, vercelEnv: string | undefined
   if (vercelEnv === "production" && /^(sk|rk)_test_/.test(key)) return null;
   return key;
 }
+
+/** The Stripe Checkout Session for one Unlimited unlock. Standard Stripe payments: the account defaults to Managed
+ *  Payments (Stripe as merchant of record), which needs a product tax code; that's off until it's set up on purpose. */
+export function checkoutParams(origin: string) {
+  return {
+    mode: "payment" as const,
+    managed_payments: { enabled: false },
+    line_items: [{
+      quantity: 1,
+      price_data: { currency: "usd", unit_amount: PRICE_CENTS,
+                    product_data: { name: "Futbol Krillion Unlimited", description: "One-time unlock. No subscription." } },
+    }],
+    customer_creation: "always" as const,       // keeps the buyer's email on a Customer, for receipts and restores
+    metadata: { product: PRODUCT },
+    payment_intent_data: { metadata: { product: PRODUCT } },
+    success_url: `${origin}/unlimited/unlocked?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/`,
+  };
+}

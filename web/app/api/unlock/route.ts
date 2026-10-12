@@ -15,7 +15,8 @@ export async function POST(req: Request) {
     const paid = await s.checkout.sessions.retrieve(session, { expand: ["payment_intent.latest_charge"] });
     if (!isUnlimitedPurchase(paid)) return json({ error: "That checkout hasn't been paid." }, 402);
     return json({ unlock: unlockToken(paid.id, gameSecret()) });
-  } catch {
+  } catch (e) {
+    console.error("unlock_check_failed", e instanceof Error ? e.message : e);   // Stripe's message only, never the key
     return json(UNREACHABLE, 502);
   }
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { sign } from "../game/tokens.ts";
-import { emailVariants, findPurchase, isUnlimitedPurchase, isUnlocked, stripeKey, unlockToken } from "./unlock.ts";
+import { checkoutParams, emailVariants, findPurchase, isUnlimitedPurchase, isUnlocked, stripeKey, unlockToken } from "./unlock.ts";
 
 const SECRET = "test-secret";
 const PAID = { id: "cs_paid", status: "complete", payment_status: "paid", metadata: { product: "unlimited" } };
@@ -65,4 +65,15 @@ test("production never takes a Stripe test key (test cards would unlock for free
   assert.equal(stripeKey("sk_test_abc", undefined), "sk_test_abc");     // local
   assert.equal(stripeKey(undefined, "production"), null);
   assert.equal(stripeKey("", undefined), null);
+});
+
+test("checkout is a one-time $4.99 payment with standard Stripe payments, back to this site either way", () => {
+  const p = checkoutParams("https://futbolkrillion.vercel.app");
+  assert.equal(p.mode, "payment");
+  assert.deepEqual(p.managed_payments, { enabled: false });   // the account defaults to Managed Payments, which needs tax codes
+  assert.equal(p.line_items[0].price_data.unit_amount, 499);
+  assert.equal(p.line_items[0].price_data.currency, "usd");
+  assert.equal(p.metadata.product, "unlimited");
+  assert.equal(p.success_url, "https://futbolkrillion.vercel.app/unlimited/unlocked?session_id={CHECKOUT_SESSION_ID}");
+  assert.equal(p.cancel_url, "https://futbolkrillion.vercel.app/");
 });
