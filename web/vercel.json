@@ -1,4 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "futbolkrillion.vercel.app" }],
+      "destination": "https://futkrill.vercel.app/:path*",
+      "permanent": true
+    }
+  ]
 }
