@@ -234,7 +234,8 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
       <header className="topbar">
         <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
         <div className="right">
-          <Link className="linkish" href="/unlimited">Unlimited</Link>
+          {/* Not mid-round: EXIT is the way out then, and the header has no room for both on a 375px phone. */}
+          {phase !== "round" && phase !== "result" && <Link className="linkish" href="/unlimited">Unlimited</Link>}
           {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}
           {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}#${day.number}`} · {fmt(landed ? total : total - (last?.points ?? 0))}</div>}
         </div>

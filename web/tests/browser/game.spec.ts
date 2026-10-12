@@ -1,6 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 const free={premium:false,canManage:false,configured:true,restoreAvailable:true,status:'free',purchasedAt:null};
 const premium={...free,premium:true,canManage:true,status:'paid',purchasedAt:'2026-10-12T00:00:00Z'};
+// Non-subscribers get the unlock pop-up when they arrive on /unlimited (user, 2026-10-12); tests that need the page behind it close it first.
+const pitch=(page:Page)=>page.getByRole('dialog',{name:'Unlock Unlimited'});
+async function closePitch(page:Page){await expect(pitch(page)).toBeVisible();await page.keyboard.press('Escape');await expect(pitch(page)).toHaveCount(0);}
 
 test('daily stays free; one-time pricing matches the existing pixel design on desktop and mobile',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -12,7 +15,7 @@ test('daily stays free; one-time pricing matches the existing pixel design on de
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:'tests/browser/daily-mobile.png',fullPage:true});
  await page.setViewportSize({width:1280,height:720});
- await page.goto('/unlimited');await expect(page.getByText('$4.99 USD · pay once',{exact:true})).toBeVisible();
+ await page.goto('/unlimited');await closePitch(page);await expect(page.getByText('$4.99 USD · pay once',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'})).toBeVisible();
  await expect(page.getByText(/One payment unlocks Unlimited/)).toBeVisible();
  await expect(page.getByText(/Renews monthly|Manage Subscription/)).toHaveCount(0);
@@ -34,7 +37,7 @@ test('free player passes a round and retains daily progress after reload',async(
 });
 
 test('forged flags and credentials cannot unlock either premium API family',async({page})=>{
- await page.goto('/unlimited');await page.evaluate(()=>localStorage.setItem('isPremium','true'));
+ await page.goto('/unlimited');await closePitch(page);await page.evaluate(()=>localStorage.setItem('isPremium','true'));
  await page.getByRole('button',{name:'PRACTICE',exact:true}).click();
  await expect(page.getByRole('status')).toContainText('Unlimited unlocks');
  await page.getByRole('button',{name:'DAILY ARCHIVE',exact:true}).click();
@@ -58,7 +61,9 @@ test('forged flags and credentials cannot unlock either premium API family',asyn
 test('checkout provider errors leave free play available',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
  await page.route('**/api/billing/checkout',r=>r.fulfill({status:503,json:{error:'Checkout temporarily unavailable.'}}));
- await page.goto('/unlimited');await page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).click();
+ await page.goto('/unlimited');await expect(pitch(page)).toBeVisible();await pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).click();
+ await expect(pitch(page)).toContainText('Checkout temporarily unavailable');
+ await closePitch(page);await page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).click();
  await expect(page.getByRole('status')).toContainText('Checkout temporarily unavailable');
  await page.goto('/');await expect(page.getByRole('button',{name:'KICK OFF',exact:true})).toBeEnabled();
 });
@@ -68,8 +73,8 @@ test('anonymous bootstrap is coalesced before checkout',async({page})=>{
  const ready=new Promise<void>(resolve=>{release=resolve;});
  await page.route('**/api/billing/session',async r=>{requests++;await ready;await r.fulfill({json:free});});
  await page.goto('/unlimited');const upgrade=page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
- await expect(upgrade).toHaveCount(0);await page.evaluate(()=>window.dispatchEvent(new Event('focus')));release();   // no buy button until the bootstrap is back
- await expect(upgrade).toBeEnabled();expect(requests).toBe(1);
+ await expect(upgrade).toHaveCount(0);await page.evaluate(()=>window.dispatchEvent(new Event('focus')));release();   // no buy button (or pop-up) until the bootstrap is back
+ await closePitch(page);await expect(upgrade).toBeEnabled();expect(requests).toBe(1);
 });
 
 test('restore removes token fragment and requires an explicit verification POST',async({page})=>{
@@ -165,14 +170,22 @@ test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE an
  await page.screenshot({path:'tests/browser/unlimited-subscriber-mobile.png',fullPage:true});
 });
 
-test('non-subscribers still see what Unlimited offers above the upgrade panel',async({page})=>{
+test('non-subscribers get the unlock pop-up first, buy button above the message; closing it leaves the page',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
  await page.goto('/unlimited');
+ const note=pitch(page).getByText(/Hey, I.m Emre/);const buy=pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
+ await expect(buy).toBeVisible();await expect(note).toBeVisible();
+ expect((await buy.boundingBox())!.y).toBeLessThan((await note.boundingBox())!.y);
+ await page.getByRole('button',{name:'Close',exact:true}).click();await expect(pitch(page)).toHaveCount(0);
+ await page.reload();await expect(pitch(page)).toBeVisible();                       // every arrival
+ await page.mouse.click(5,5);await expect(pitch(page)).toHaveCount(0);               // click outside also closes it
  const perks=page.getByText('Out of dailies? Keep playing.');
  await expect(perks).toBeVisible();
  await expect(page.getByRole('region',{name:"Today's daily"})).toHaveCount(0);
  await expect(page.getByText(/Wrexham|two-club|No ads/)).toHaveCount(0);
- expect((await perks.boundingBox())!.y).toBeLessThan((await page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).boundingBox())!.y);
+ const panelNote=page.getByText(/Hey, I.m Emre/);const panelBuy=page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
+ expect((await perks.boundingBox())!.y).toBeLessThan((await panelBuy.boundingBox())!.y);
+ expect((await panelBuy.boundingBox())!.y).toBeLessThan((await panelNote.boundingBox())!.y);   // button above the message here too
  await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toHaveClass(/secondary/);
 });
 
@@ -183,9 +196,11 @@ test('players who paid never see the sales pitch while their status loads',async
  await expect(page.getByText(/Checking your Unlimited/)).toBeVisible();
  await expect(page.getByText(/Hey, I.m Emre/)).toHaveCount(0);
  await expect(page.getByText('Out of dailies? Keep playing.')).toHaveCount(0);
+ await expect(pitch(page)).toHaveCount(0);
  release();
  await expect(page.getByText('Unlimited is yours. Play as many sets as you like.')).toBeVisible();
  await expect(page.getByText(/Hey, I.m Emre/)).toHaveCount(0);
+ await expect(pitch(page)).toHaveCount(0);
 });
 
 test('the header (logo, EXIT, score) fits a 375px phone during a round, and the page is named Futkrill',async({page})=>{
@@ -196,4 +211,14 @@ test('the header (logo, EXIT, score) fits a 375px phone during a round, and the 
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  const led=await page.locator('.topbar .led').boundingBox();expect(led!.x+led!.width).toBeLessThanOrEqual(375);
  await expect(page.getByRole('img',{name:'Futkrill'}).first()).toBeVisible();
+});
+
+test('the logo is the same one-line FUTKRILL wordmark in the header of every page',async({page})=>{
+ for (const path of ['/','/terms','/privacy','/unlimited']) {
+  await page.goto(path);
+  const logo=page.getByRole('img',{name:'Futkrill'}).first();await expect(logo).toBeVisible();
+  const box=await logo.boundingBox();expect(box!.y).toBeLessThan(80);                 // at the top
+  expect(box!.width/box!.height).toBeGreaterThan(2.7);                                  // one line (the stacked version was 2.6)
+  expect(box!.width).toBeLessThanOrEqual(130);                                          // still fits a 375px phone header
+ }
 });

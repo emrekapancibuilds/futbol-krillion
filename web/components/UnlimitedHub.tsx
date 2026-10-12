@@ -1,14 +1,15 @@
 "use client";
 
 // /unlimited. Subscribers get their Unlimited card first and today's daily countdown under it (user, 2026-10-12);
-// everyone else gets what Unlimited offers, then the upgrade panel. Until the billing status is known, only the
+// everyone else gets the pitch as a pop-up first, then what Unlimited offers and the upgrade panel under it. Until the billing status is known, only the
 // panel shows, so subscribers never see the sales pitch flash by.
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
 
 import DailyCountdown from "@/components/DailyCountdown";
+import UnlockModal from "@/components/UnlockModal";
 import SubscriptionPanel, { type BillingStatus } from "@/components/SubscriptionPanel";
 
 // Only what Unlimited really has: people pay for these lines.
@@ -41,8 +42,11 @@ export default function UnlimitedHub() {
   const [status, setStatus] = useState<BillingStatus | null | undefined>(undefined);
   const known = status !== undefined;
   const premium = status?.premium === true;
+  // Everyone who hasn't paid gets the pitch as a pop-up each time they arrive; closing it leaves the page as it is.
+  const [dismissed, setDismissed] = useState(false);
   return (
     <>
+      <AnimatePresence>{known && !premium && !dismissed && <UnlockModal onClose={() => setDismissed(true)} />}</AnimatePresence>
       {known && !premium && <Perks />}
       <SubscriptionPanel onStatus={setStatus} />
       {premium && <DailyCountdown />}

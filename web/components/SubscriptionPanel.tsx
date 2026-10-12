@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { DayInfo } from '@/lib/game/types.ts';
+import UnlockPitch from '@/components/UnlockPitch';
 export type BillingStatus = { premium: boolean; canManage: boolean; configured: boolean; restoreAvailable: boolean;
   status: string; purchasedAt: string | null };
 let sessionRequest: Promise<BillingStatus> | null = null;
@@ -15,6 +16,11 @@ export async function billingRequest<T>(url: string, body?: object): Promise<T> 
   const data = await response.json();
   if (!response.ok) throw new Error(data.error ?? 'Please try again.');
   return data as T;
+}
+/** Opens Stripe Checkout for Unlimited; resolves only if it fails (otherwise the page navigates away). */
+export async function startCheckout() {
+  const result = await billingRequest<{ url: string }>('/api/billing/checkout', {});
+  window.location.assign(result.url);
 }
 export default function SubscriptionPanel({ onStatus }: { onStatus?: (status: BillingStatus | null) => void } = {}) {
   const router = useRouter();
@@ -68,15 +74,7 @@ export default function SubscriptionPanel({ onStatus }: { onStatus?: (status: Bi
     {status?.premium ? <>
       <p className="muted">Unlimited is yours. Play as many sets as you like.</p>
     </> : <>
-      <div className="creator-note">
-        <p>Hey, I&apos;m Emre. I made Futkrill for people who know their football a little too well.</p>
-        <p>Done with the daily? Keep playing, in whichever league or competition you know best. Your purchase also helps me keep building the game.</p>
-        <p>Thanks for playing. — Emre</p>
-      </div>
-      <p>Unlimited practice + every previous daily.</p>
-      <p className="price">$4.99 USD · pay once</p>
-      <p className="muted billing-terms">One payment unlocks Unlimited. No recurring charges. Applicable taxes are shown at checkout. No account required.</p>
-      <button className="btn" disabled={busy || loading} onClick={() => redirect('/api/billing/checkout')}>{busy ? 'PLEASE WAIT…' : 'UNLOCK UNLIMITED — $4.99'}</button>
+      <UnlockPitch busy={busy || loading} onUnlock={() => redirect('/api/billing/checkout')} />
     </>}
     <div className="billing-actions">
       <button className={actionClass} disabled={busy} onClick={() => play('practice')}>PRACTICE</button>
