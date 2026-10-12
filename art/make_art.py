@@ -509,18 +509,17 @@ def ball(n: int) -> Canvas:
 
 
 def logo() -> Canvas:
-    """Ball, then FUT over KRILL (two lines keep it no wider than the old logo, which the phone header needs)."""
-    top, bottom = "FUT", "KRILL"
-    tw = text_width(bottom, FONT5, 1)
-    b = ball(20)
-    w = b.w + 4 + tw + 4
-    cv = Canvas(w, b.h + 2)
-    cv.blit(b, 1, 1)
-    x0 = b.w + 5
-    for text, y in ((top, 2), (bottom, 12)):
-        x = x0 + (tw - text_width(text, FONT5, 1)) // 2
-        draw_text(cv, text, x + 1, y + 1, FONT5, AMBER_DIM, gap=1)      # drop shadow
-        draw_text(cv, text, x, y, FONT5, GOLD, gap=1, shade=GOLD_DARK)
+    """Ball + FUTKRILL on one line (user, 2026-10-12). The canvas stays 22px tall so the header's 44px height is an exact
+    2x, and at most 64px wide so it still fits a 375px phone header next to EXIT and the score."""
+    text = "FUTKRILL"
+    tw = text_width(text, FONT5, 1)
+    b = ball(14)
+    w = 1 + b.w + 2 + tw + 1
+    cv = Canvas(w, 22)
+    cv.blit(b, 1, (22 - b.h) // 2)
+    x, y = 1 + b.w + 2, (22 - 7) // 2
+    draw_text(cv, text, x + 1, y + 1, FONT5, AMBER_DIM, gap=1)      # drop shadow
+    draw_text(cv, text, x, y, FONT5, GOLD, gap=1, shade=GOLD_DARK)
     cv.outline()
     return cv
 
@@ -565,7 +564,7 @@ def main():
     # social preview 1200x630: scene + logo + mascot
     og = scaled(stadium(300, 158, seed=3).im, 4).crop((0, 0, 1200, 630)).convert("RGBA")
     big = scaled(lg, 5)
-    og.alpha_composite(big, ((1200 - big.width) // 2, 38))     # above the stadium scoreboard, which would peek out behind it
+    og.alpha_composite(big, ((1200 - big.width) // 2, 44))     # above the stadium scoreboard, which would peek out behind it
     og.alpha_composite(scaled(m, 5), (1200 // 2 - 80, 360))
     og.convert("RGB").save(OUT / "og.png")
     scaled(ball(32).im, 1).save(OUT / "favicon-32.png")
