@@ -107,6 +107,10 @@ CLUB_ALIASES = {
     "RB Leipzig": ["Leipzig", "RBL"],
     "Hamburger SV": ["Hamburg", "HSV"],
 }
+# Team prompts that may be dailies beyond Europe's top 5 leagues (user, 2026-10-12: "some can be, but not all"): the
+# best-known extra leagues, and the bigger football countries for "Name a team from X that played in Europe".
+TEAM_DAILY_LEAGUES = {"premier-league", "la-liga", "serie-a", "bundesliga", "ligue-1", "eredivisie", "primeira-liga", "super-lig"}
+TEAM_DAILY_COUNTRIES = {"Germany", "Spain", "Italy", "France", "Netherlands", "Portugal", "Turkey"}
 TEAM_FAMILIES = {"nations", "clubs"}   # prompt families whose answers are teams (entity types nation and club)
 TEAM_MIN_ANSWERS = 12                  # smaller categories aren't a prompt
 TEAM_MIN_FAMOUS = 8                    # answers a casual fan could name (tiers 1-3) for a team prompt to go out free
