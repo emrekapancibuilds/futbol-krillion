@@ -8,7 +8,7 @@ export function shareText(game: number | string, points: number[], tiers: (numbe
   const total = points.reduce((a, b) => a + b, 0);
   const best = tiers.filter((t): t is number => t !== null).sort((a, b) => b - a)[0];
   return [
-    `Futbol Krillion ${typeof game === "number" ? `#${game}` : game} · ${fmt(total)} / 7,000`,
+    `Futkrill ${typeof game === "number" ? `#${game}` : game} · ${fmt(total)} / 7,000`,
     points.join(" · "),
     `Best pick: ${best ? tierInfo(best).name : "none"}`,
     url,
