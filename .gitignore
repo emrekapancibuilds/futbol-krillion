@@ -1,0 +1,20 @@
+.superpowers/
+.DS_Store
+
+# Credentials and local runtime artifacts, anywhere in the repository
+.env*
+!.env.example
+*.pem
+*.key
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Local verification screenshots and operational reports
+web/tests/browser/*.png
+web/tests/verification-connected.json
+CONTINUATION_STATUS.md
+web/IMPLEMENTATION_REPORT.md

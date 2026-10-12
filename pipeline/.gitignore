@@ -1,0 +1,6 @@
+.venv/
+raw/
+cache/
+out/
+export/
+__pycache__/
