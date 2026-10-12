@@ -413,37 +413,49 @@ ICONS = {"tier-1-bandwagon": icon_bus, "tier-2-glory-hunter": icon_scarf, "tier-
 
 
 # ---------------------------------------------------------------- mascot (32x32)
+SHIRT = (214, 52, 56)
+SHIRT_DARK = (160, 32, 44)
+SHORTS = (36, 60, 140)
+HAIR = (70, 42, 28)
+SKIN_M = (240, 196, 150)
+SKIN_SHADE = (206, 156, 112)
+
+
 def mascot() -> Canvas:
-    import math
+    """A footballer celebrating: arms up, red shirt, ball at the feet."""
     cv = Canvas(32, 32)
-    # curled krill body: a fat arc of segments, head top-right, tail bottom-left
-    for i in range(9):
-        t = math.pi * (0.15 + i * 0.09)
-        cx = round(15 + 9 * math.cos(t)); cy = round(13 + 9 * math.sin(t) * 0.8)
-        r = 4 if i < 6 else 3
-        cv.ellipse(cx, cy, r, r, KRILL)
-        cv.put(cx - 1, cy - r + 1, KRILL_LIGHT)
-    # segment lines
-    for i in range(1, 8):
-        t = math.pi * (0.15 + i * 0.09)
-        cx = round(15 + 9 * math.cos(t)); cy = round(13 + 9 * math.sin(t) * 0.8)
-        cv.put(cx, cy, KRILL_DARK); cv.put(cx + 1, cy, KRILL_DARK)
-    # head and eye
-    cv.ellipse(23, 9, 5, 4, KRILL)
-    cv.rect(21, 6, 24, 6, KRILL_LIGHT)
-    cv.rect(24, 7, 25, 8, WHITE); cv.put(25, 8, INK); cv.put(24, 7, WHITE)
-    # antennae
-    cv.line(26, 6, 30, 1, KRILL_DARK); cv.line(25, 5, 27, 0, KRILL_DARK)
-    # tail fan
-    cv.line(5, 20, 2, 23, KRILL_DARK); cv.line(6, 21, 4, 25, KRILL_DARK); cv.rect(2, 22, 4, 24, KRILL)
-    # little legs, one kicking, and boots
-    for x in range(13, 22, 3):
-        cv.line(x, 20, x - 1, 23, KRILL_DARK)
-    cv.line(22, 19, 25, 23, KRILL_DARK)
-    cv.rect(24, 23, 26, 24, INK)                                     # boot
-    # football
-    cv.ellipse(28, 26, 3, 3, WHITE)
-    cv.put(28, 26, INK); cv.put(27, 25, INK); cv.put(29, 25, INK); cv.put(28, 28, INK)
+    # arms up (sleeve, then hand)
+    for (x0, y0, x1, y1) in ((11, 14, 6, 8), (21, 14, 26, 8)):
+        cv.line(x0, y0, x1, y1, SHIRT); cv.line(x0, y0 + 1, x1, y1 + 1, SHIRT)
+        cv.line(x0 + (1 if x0 > 16 else -1), y0, x1 + (1 if x0 > 16 else -1), y1, SHIRT_DARK)
+    for (hx, hy) in ((5, 6), (27, 6)):
+        cv.rect(hx - 1, hy - 1, hx + 1, hy + 1, SKIN_M)
+    # legs and socks
+    cv.rect(12, 23, 14, 27, SKIN_M); cv.rect(18, 23, 20, 27, SKIN_M)
+    cv.rect(12, 26, 14, 28, WHITE); cv.rect(18, 26, 20, 28, WHITE)
+    cv.rect(12, 26, 14, 26, SHIRT); cv.rect(18, 26, 20, 26, SHIRT)        # sock tops
+    # boots
+    cv.rect(11, 29, 15, 30, INK); cv.rect(17, 29, 21, 30, INK)
+    cv.put(15, 29, SKIN_SHADE); cv.put(21, 29, SKIN_SHADE)
+    # shorts
+    cv.rect(11, 20, 21, 24, SHORTS)
+    cv.line(16, 21, 16, 24, (20, 36, 96))
+    # shirt, with a white collar and a gold number block
+    cv.rect(11, 12, 21, 20, SHIRT)
+    cv.rect(11, 18, 21, 20, SHIRT); cv.rect(11, 20, 21, 20, SHIRT_DARK)
+    cv.rect(15, 12, 17, 12, SKIN_SHADE)                                    # neck
+    cv.rect(14, 13, 18, 13, WHITE)                                         # collar
+    cv.rect(14, 15, 18, 18, SHIRT_DARK)
+    cv.rect(15, 15, 17, 17, GOLD)                                          # number block
+    # head: skin, hair, face
+    cv.ellipse(16, 7, 4, 4, SKIN_M)
+    cv.rect(11, 4, 21, 5, HAIR); cv.rect(12, 3, 20, 3, HAIR); cv.rect(11, 6, 12, 8, HAIR); cv.rect(20, 6, 21, 8, HAIR)
+    cv.put(14, 7, INK); cv.put(18, 7, INK)                                 # eyes
+    cv.rect(14, 10, 18, 10, WHITE); cv.rect(15, 11, 17, 11, INK)           # big grin, mouth open
+    cv.rect(15, 10, 17, 10, INK)
+    cv.put(13, 9, SKIN_SHADE); cv.put(19, 9, SKIN_SHADE)
+    # ball at the right foot
+    cv.blit(ball(11), 21, 20)
     cv.outline()
     return cv
 
@@ -552,8 +564,8 @@ def main():
 
     # social preview 1200x630: scene + logo + mascot
     og = scaled(stadium(300, 158, seed=3).im, 4).crop((0, 0, 1200, 630)).convert("RGBA")
-    big = scaled(lg, 6)
-    og.alpha_composite(big, ((1200 - big.width) // 2, 150))
+    big = scaled(lg, 5)
+    og.alpha_composite(big, ((1200 - big.width) // 2, 38))     # above the stadium scoreboard, which would peek out behind it
     og.alpha_composite(scaled(m, 5), (1200 // 2 - 80, 360))
     og.convert("RGB").save(OUT / "og.png")
     scaled(ball(32).im, 1).save(OUT / "favicon-32.png")
