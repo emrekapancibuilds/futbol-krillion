@@ -402,3 +402,16 @@ a.btn { display: block; text-align: center; text-decoration: none; }
 .legal a { color: var(--cyan); }
 .legal .legal-links { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 footer.small a { color: inherit; }
+
+/* Today's daily card on /unlimited for subscribers (components/DailyCountdown.tsx). */
+.daily-countdown p { margin: 0; }
+.daily-countdown .countdown-line { color: var(--muted); }
+.daily-countdown .countdown {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-display), monospace;
+  font-size: 40px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}

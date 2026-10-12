@@ -134,3 +134,39 @@ test('archive progress and streaks remain separate from free daily',async({page}
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('fk:streak')!))).toEqual({last:2,streak:2});
  expect(await page.evaluate(()=>localStorage.getItem('fk:day:1'))).toBeNull();
 });
+
+test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE and DAILY ARCHIVE',async({page})=>{
+ await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
+ await page.goto('/unlimited');
+ const panel=page.getByRole('region',{name:'Soccer Krillion Unlimited'});
+ const daily=page.getByRole('region',{name:"Today's daily"});
+ await expect(daily).toContainText(/Next daily in \d\d:\d\d:\d\d/);
+ await expect(daily.getByRole('link',{name:"PLAY TODAY'S DAILY"})).toBeVisible();
+ await expect(page.getByText('Out of dailies? Keep playing.')).toHaveCount(0);
+ expect((await panel.boundingBox())!.y).toBeLessThan((await daily.boundingBox())!.y);
+ const yellow=await daily.getByRole('link',{name:"PLAY TODAY'S DAILY"}).evaluate(e=>getComputedStyle(e).backgroundColor);
+ for (const name of ['PRACTICE','DAILY ARCHIVE']) {
+  const button=panel.getByRole('button',{name,exact:true});
+  await expect(button).not.toHaveClass(/secondary/);
+  await expect(button).toHaveCSS('background-color',yellow);
+ }
+ const {number}=await (await page.request.get('/api/daily')).json();
+ await page.evaluate(n=>localStorage.setItem(`fk:day:${n}`,JSON.stringify({results:Array.from({length:7},()=>({status:'passed',points:0,tier:null,key:'x'}))})),number);
+ await page.reload();
+ await expect(daily).toContainText("You've played today's daily.");
+ await expect(daily.getByRole('link',{name:"PLAY TODAY'S DAILY"})).toHaveCount(0);
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.screenshot({path:'tests/browser/unlimited-subscriber-mobile.png',fullPage:true});
+});
+
+test('non-subscribers still see what Unlimited offers above the upgrade panel',async({page})=>{
+ await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
+ await page.goto('/unlimited');
+ const perks=page.getByText('Out of dailies? Keep playing.');
+ await expect(perks).toBeVisible();
+ await expect(page.getByRole('region',{name:"Today's daily"})).toHaveCount(0);
+ await expect(page.getByText(/Wrexham|two-club|No ads/)).toHaveCount(0);
+ expect((await perks.boundingBox())!.y).toBeLessThan((await page.getByRole('button',{name:'UPGRADE TO UNLIMITED'}).boundingBox())!.y);
+ await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toHaveClass(/secondary/);
+});
