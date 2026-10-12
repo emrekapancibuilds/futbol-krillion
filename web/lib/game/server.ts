@@ -1,7 +1,6 @@
 // Server-only access to the packaged game data in ./data (see pipeline/jobless/webdata.py).
 import fs from "node:fs";
 import path from "node:path";
-import { extendSchedule } from "./schedule.ts";
 
 import type { NameRow } from "../matching/match.ts";
 import type { Day, GameData, PromptData } from "./engine.ts";
@@ -28,7 +27,7 @@ export function gameData(): GameData {
       return names.get(type)!;
     },
   };
-  return { ...cached, days: extendSchedule(cached.days, read<string[]>("fallback-prompts.json"), new Date()) };
+  return cached;
 }
 
 function unlimitedData(): Pick<GameData, "unlimited" | "categories" | "subjects"> {
@@ -47,5 +46,3 @@ export function gameSecret(): string {
 export function snapshotDate(): string {
   return read<{ tm_snapshot: string }>("meta.json").tm_snapshot;
 }
-
-export function promptIds() { return gameData().unlimited; }

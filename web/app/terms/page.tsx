@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
-// Factual billing descriptions updated for this build; review before a production launch.
+// Terms of service: free daily, no accounts, no ads; Unlimited a one-time $4.99 Stripe purchase (2026-10-12).
+// Update together with /privacy before shipping accounts, ads or a different price model. No governing-law clause yet: that depends
+// on where the owner is based.
 export const metadata: Metadata = {
   title: "Terms · Futbol Krillion",
   description: "The rules for playing Futbol Krillion.",
@@ -16,14 +18,14 @@ export default function Terms() {
       <p>
         These terms cover your use of Futbol Krillion, the football trivia game at futbolkrillion.vercel.app. By
         playing, you agree to them. The short version: play fair, have fun, and don&apos;t treat the answer lists as
-        gospel. The daily game is free; optional paid access is described below.
+        gospel. The daily is free, Unlimited is a one-time purchase, and the game comes as it is.
       </p>
 
       <h2>The game</h2>
       <p>
-        The daily game is free to play, with no account needed. A new daily goes live at 00:00 UTC. Unlimited
-        practice and the daily archive require paid access. We may change any part of the game at any time, including prompts, answers, scoring and
-        features, and we may pause it or stop running it.
+        Futbol Krillion needs no account. The daily is free, and a new one goes live at 00:00 UTC. Unlimited, which
+        lets you keep playing in sets of 7, is a one-time purchase. We may change any part of the game at any time,
+        including prompts, answers, scoring and features, and we may pause it or stop running it.
       </p>
 
       <h2>Play fair</h2>
@@ -31,7 +33,8 @@ export default function Terms() {
       <ul>
         <li>use bots, scripts or other automated tools to play, or to pull prompts or answer lists from our server;</li>
         <li>try to get around the timer, the answer checking or the limits on how much of each answer list is shown;</li>
-        <li>overload, probe or disrupt the site or its server.</li>
+        <li>overload, probe or disrupt the site or its server;</li>
+        <li>unlock Unlimited with someone else&apos;s purchase, or share, sell or publish a way to unlock it.</li>
       </ul>
       <p>We may block access that breaks these rules.</p>
 
@@ -63,18 +66,18 @@ export default function Terms() {
         answer lists to use elsewhere.
       </p>
 
-      <h2>Unlimited subscriptions</h2>
+      <h2>Buying Unlimited</h2>
       <p>
-        Unlimited costs $4.99 USD per month and renews automatically until canceled. Applicable taxes are displayed
-        at Checkout. Stripe handles payment and subscription management. You can cancel through Manage Subscription;
-        access continues through the period already paid for. A failed renewal does not extend that period.
+        Unlimited costs $4.99 (US dollars), paid once through Stripe. There&apos;s no subscription; your bank may add
+        its own currency conversion fee. It unlocks Unlimited on the device you buy on, and you can restore it on
+        another device with the email you paid with. &ldquo;Forever&rdquo; means for as long as we run Futbol
+        Krillion. We may change the price for new buyers, but that never changes what you&apos;ve already bought.
+        Refunds follow our <Link href="/refunds">refund policy</Link>: in short, a full refund within 14 days, no
+        questions asked.
       </p>
-      <p>
-        Access is recognized in the purchasing browser. To restore it on another browser, verify the email used
-        for payment through Restore Purchase. This creates a passwordless email identity in Supabase Auth and
-        restores billing access, not local scores or streaks. Sandbox purchases shown as test payments do not
-        charge real money.
-      </p>
+
+      <h2>Ads</h2>
+      <p>There are no ads right now. If ads arrive, these terms and the privacy policy will be updated first.</p>
 
       <h2>No guarantees</h2>
       <p>
@@ -86,7 +89,7 @@ export default function Terms() {
       <p>
         To the extent the law allows, we aren&apos;t liable for indirect or consequential losses, or for lost progress,
         streaks or scores, that come from using the game. If we are ever found liable to you, our total liability is
-        limited to what you paid us to use it. None of this limits rights you have under
+        limited to what you paid us for Futbol Krillion, if anything. None of this limits rights you have under
         consumer law that can&apos;t be waived.
       </p>
 

@@ -1,9 +1,7 @@
-# Claude Code handoff
+# Claude Code collaboration
 
-Read and follow `AGENTS.md`. The app is in `web/`; the data pipeline is in `pipeline/`.
+This branch preserves Claude's one-time-unlock work as of source commit `7daa044`. Work in this separate clone/worktree; Codex has a different checkout. Use commits and pull requests to share changes.
 
-Clone the GitHub repository into a separate directory and work on `claude/<task>`. Codex uses a different checkout and branch. Share changes through commits and pull requests, not concurrent edits to the same files.
+The owner has been asked to choose monthly versus one-time billing. Until resolved, preserve both versions and do not merge the payment implementations automatically. Main has working Supabase email verification; this branch must verify email ownership before restoring a purchase. Merely typing an email must never grant premium access.
 
-Do not copy an older standalone one-time payment implementation over the tested subscription routes. First settle the billing model with the owner, then deliberately integrate any desired UI work.
-
-Local environment values are intentionally excluded. Copy `web/.env.example` to an ignored file on a fresh clone and obtain credentials through the owner's local configuration. Never put them in a commit or a chat message.
+Do not deploy this experimental branch, expose runtime keys, or push over another agent's branch. Read `AGENTS.md` and `web/AGENTS.md` before changes.

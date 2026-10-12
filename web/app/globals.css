@@ -372,20 +372,6 @@ a.btn { display: block; text-align: center; text-decoration: none; }
   text-shadow: 0 0 6px rgba(80, 220, 255, 0.45);
 }
 
-/* Billing additions reuse the game's panels, colors, buttons and typography. */
-.subscription p { margin: 0; }
-.billing-heading, .billing-links { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
-.premium-badge { color: var(--cyan); font-size: 16px; }
-.price { color: var(--gold); font-family: var(--font-display), monospace; }
-.billing-terms { font-size: 16px; line-height: 1.4; }
-.billing-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.billing-actions .btn { font-size: 16px; letter-spacing: 1px; }
-.billing-links { justify-content: flex-start; font-size: 16px; }
-.restore-form input { width: 100%; min-width: 0; background: #05060c; border: 2px solid var(--panel-edge); color: var(--ink); font: inherit; padding: 10px; }
-.restore-form input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
-.archive-list { display: grid; gap: 12px; max-height: 250px; overflow: auto; padding: 5px; }
-.billing-back { text-align: center; text-decoration: none; }
-
 /* Privacy page: long-form text in the body font, section heads in the pixel font. */
 .legal { display: grid; gap: 10px; line-height: 1.55; }
 .legal .effective { margin: -4px 0 4px; font-size: 14px; }
@@ -402,3 +388,29 @@ a.btn { display: block; text-align: center; text-decoration: none; }
 .legal a { color: var(--cyan); }
 .legal .legal-links { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 footer.small a { color: inherit; }
+
+/* Unlimited pitch (components/Unlock.tsx): Emre's note on a darker card, the restore form, the end-of-daily nudge. */
+.note { background: #05060c; box-shadow: 0 0 0 2px #000, 0 0 0 4px var(--panel-edge); padding: 14px 16px; line-height: 1.5; }
+.note p { margin: 0 0 10px; }
+.note p:last-child { margin: 0; }
+.note .sign { font-family: var(--font-display), monospace; color: var(--gold); font-size: 18px; }
+.unlock .btn { width: 100%; }
+.unlock-error { margin: 0; color: var(--red); }
+.restore-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.restore-row input {
+  min-width: 0;
+  font-family: var(--font-body), sans-serif;
+  font-size: 17px;
+  background: #05060c;
+  color: var(--ink);
+  border: 0;
+  box-shadow: 0 0 0 2px #000, 0 0 0 4px var(--panel-edge);
+  padding: 12px;
+  outline: none;
+}
+.restore-row input:focus { box-shadow: 0 0 0 2px #000, 0 0 0 4px var(--gold); }
+.restore-row .btn { width: auto; padding: 12px 16px; }
+.unlock-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; font-size: 14px; }
+.unlock-foot a { color: inherit; }
+.keep-going { display: grid; gap: 8px; }
+.keep-going p { margin: 0; text-align: center; color: var(--cyan); }

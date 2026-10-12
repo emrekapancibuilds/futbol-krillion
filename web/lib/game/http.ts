@@ -1,12 +1,16 @@
 import { dayFor, type Slot } from "./engine.ts";
 import { gameData } from "./server.ts";
-import { readBody } from "../billing/security.ts";
 
 export const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 export async function body(req: Request): Promise<Record<string, unknown>> {
-  return readBody(req, 65536);
+  try {
+    const b = await req.json();
+    return b && typeof b === "object" ? (b as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** The round a request is about: `{ day, round }` for the daily, `{ prompt }` for Unlimited. */

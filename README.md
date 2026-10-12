@@ -1,53 +1,18 @@
-# Futbol Krillion
+# Futbol Krillion — Claude one-time purchase work
 
-A football trivia game with a shared free daily, 30-second rounds, rarity scoring, pixel-art reveals and optional Unlimited access.
+This branch preserves the separate Claude implementation at source commit `7daa044`: a one-time $4.99 unlock, the personal Unlimited pitch, Privacy/Terms, and a placeholder refund page. It is a work-in-progress alternative to `main`, which contains the tested monthly Stripe subscription and Supabase-verified restoration.
 
-- `web/`: Next.js application, Stripe subscriptions, Supabase email verification and database migrations.
-- `pipeline/`: Python football-data preparation and prompt generation.
-- `art/`: Artwork generation source.
+No production deployment is connected to this branch. Settle the billing model with the owner before merging. This snapshot's restore-by-email endpoint does not verify ownership of that email; transplant the Supabase verification flow from `main` before using it with customer purchases. Also reconcile refund revocation, archive behavior, schema and tests deliberately. Do not merge the payment routes automatically.
 
-## Development
-
-Use Node.js 24 or newer. From a fresh checkout:
+For Claude Code:
 
 ```sh
+git clone --branch claude/one-time-unlock https://github.com/emrekapancibuilds/futbol-krillion.git
+cd futbol-krillion
 cd web
 npm ci
 cp .env.example .env.development.local
-npm run dev -- --port 3100
+npm run dev -- --port 3200
 ```
 
-Fill local environment values from your own sandbox configuration. Never commit credentials. The daily remains available without billing configuration. See [web setup](web/README.md) for Stripe, Supabase and email settings.
-
-## Working with Claude Code and Codex
-
-Use a separate clone or Git worktree for each coding agent. Start each change from the latest `main` on a separate branch, such as `claude/gameplay` or `codex/billing`. Open pull requests and review changes before merging. Do not have two agents edit the same checkout or push over each other's branch.
-
-```sh
-git clone https://github.com/emrekapancibuilds/futbol-krillion.git
-cd futbol-krillion
-git switch -c claude/gameplay
-```
-
-The repository contains source and public game data only. Runtime credentials, local billing records, database dumps and internal handoff reports stay outside Git. A new clone needs its own ignored environment file.
-
-## Current behavior
-
-This version uses a $4.99 USD monthly Stripe subscription. Supabase verifies the checkout email when restoring a purchase; it creates a passwordless Auth identity only when that flow is requested. Browser progress stays local. Stripe payment status and server-side ownership determine paid access.
-
-The public repository is not an automatic production deployment. Local sandbox verification has covered Checkout, paid access, the Portal, scheduled cancellation and webhook replay. Supabase's default email sender is suitable only for project-team testing; configure custom SMTP before emailing real customers or branding emails.
-
-## Validation
-
-```sh
-cd web
-npm run typecheck
-npm run lint
-npm test
-npm run test:e2e
-npm run build
-```
-
-For tests against an already running local sandbox, use `FK_E2E_REUSE_SERVER=true npm run test:e2e`. Never target production credentials when testing.
-
-The Privacy and Terms pages describe the implementation and should be reviewed before a production launch. No reuse license has been added by this publication; existing ownership and data-source terms still apply.
+Use a separate checkout and branch for each coding agent. Keep changes in pull requests. Runtime credentials are intentionally excluded; obtain them through local configuration, never commits or chat. `main` remains the integration reference for Supabase email identity, private billing records and payment verification.
