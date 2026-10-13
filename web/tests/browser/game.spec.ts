@@ -222,3 +222,24 @@ test('the logo is the same one-line FUTKRILL wordmark in the header of every pag
   expect(box!.width).toBeLessThanOrEqual(130);                                          // still fits a 375px phone header
  }
 });
+
+test('lost access: Restore Purchase tells people to email the owner (restore emails are not set up yet)',async({page})=>{
+ await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
+ let emailRequests=0;await page.route('**/api/billing/restore/request',r=>{emailRequests++;return r.fulfill({json:{message:'x'}});});
+ await page.goto('/unlimited');await closePitch(page);
+ await page.getByRole('button',{name:'Restore Purchase'}).click();
+ const help=page.getByTestId('restore-help');
+ await expect(help).toContainText(/lost access|new device/i);
+ await expect(help.getByRole('link',{name:'emre.kapanci@gmail.com'})).toHaveAttribute('href',/^mailto:emre\.kapanci@gmail\.com/);
+ await expect(page.getByLabel('Email used at checkout')).toHaveCount(0);                 // no form that can't send
+ await expect(page.getByRole('button',{name:'SEND RESTORE LINK'})).toHaveCount(0);
+ expect(emailRequests).toBe(0);
+});
+
+test('the terms and privacy pages say to contact the owner for lost access, not to use a restore email',async({page})=>{
+ for (const path of ['/terms','/privacy']) {
+  await page.goto(path);
+  await expect(page.locator('article')).not.toContainText(/verification link|passwordless|through Restore Purchase|verify your payment email/i);
+  await expect(page.locator('article')).toContainText(/lose access|lost access/i);
+ }
+});

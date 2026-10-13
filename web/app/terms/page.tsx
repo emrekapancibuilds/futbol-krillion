@@ -71,10 +71,9 @@ export default function Terms() {
         suspended while a payment is disputed. Contact us with purchase questions or refund requests.
       </p>
       <p>
-        Access is recognized in the purchasing browser. To restore it on another browser, verify the email used
-        for payment through Restore Purchase. This creates a passwordless email identity in Supabase Auth and
-        restores billing access, not local scores or streaks. Sandbox purchases shown as test payments do not
-        charge real money.
+        Access is recognized in the purchasing browser. If you lose access or want it on another device, email{" "}
+        {mail} from the address you paid with and we&apos;ll restore it. Restoring brings back paid access, not local
+        scores or streaks.
       </p>
 
       <h2>No guarantees</h2>
