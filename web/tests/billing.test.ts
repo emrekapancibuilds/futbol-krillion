@@ -25,7 +25,7 @@ const checkouts=new Map<string, Record<string,unknown>>();
 let sequence=0;let checkoutCreates=0;let lastCheckout:Record<string,unknown>={};
 const list=<T>(items:T[])=>({data:items,async *[Symbol.asyncIterator](){yield* items;}});
 const api={
- prices:{retrieve:async()=>({id:'price_test',active:true,livemode:false,currency:'usd',unit_amount:499,type:'one_time',recurring:null})},
+ prices:{retrieve:async()=>({id:'price_test',active:true,livemode:false,currency:'usd',unit_amount:799,type:'one_time',recurring:null})},
  customers:{create:async(v:{metadata:Record<string,string>})=>{const c={id:`cus_${++sequence}`,email:null,livemode:false,metadata:v.metadata};customers.set(c.id,c);return c;},
   retrieve:async(id:string)=>{const c=customers.get(id);if(!c)throw new Error('Unknown customer');return c;},
   list:({email}:{email:string})=>list([...customers.values()].filter(c=>c.email===email))},
@@ -34,12 +34,12 @@ const api={
  checkout:{sessions:{create:async(v:Record<string,unknown>)=>{checkoutCreates++;lastCheckout=v;const id=`cs_test_${++sequence}`;const r={...v,id,livemode:false,status:'open',created:Math.floor(Date.now()/1000),expires_at:Math.floor(Date.now()/1000)+1800,url:`https://checkout.stripe.com/${id}`};checkouts.set(id,r);return r;},
  retrieve:async(id:string)=>{const c=checkouts.get(id);if(!c)throw new Error('Unknown checkout');return c;},
  list:({customer}:{customer:string})=>list([...checkouts.values()].filter(s=>s.customer===customer&&s.status==='complete')),
- listLineItems:async(id:string)=>({has_more:false,data:[{price:{id:checkouts.get(id)?.fixturePrice??'price_test'},quantity:1,amount_subtotal:499,currency:'usd',amount_discount:0}]}),
+ listLineItems:async(id:string)=>({has_more:false,data:[{price:{id:checkouts.get(id)?.fixturePrice??'price_test'},quantity:1,amount_subtotal:799,currency:'usd',amount_discount:0}]}),
  expire:async(id:string)=>{checkouts.get(id)!.status='expired';}
  }}
 };
 mock.module('../lib/billing/stripe.ts',{namedExports:{APP:'futbol-krillion',billingMode:()=>false,priceId:()=> 'price_test',stripe:()=>api,
- objectId:(v:unknown)=>typeof v==='string'?v:(v as {id:string}|null)?.id??null,validatePrice:async()=>{const p=await api.prices.retrieve();if(p.unit_amount!==499)throw new Error('Invalid price');}}});
+ objectId:(v:unknown)=>typeof v==='string'?v:(v as {id:string}|null)?.id??null,validatePrice:async()=>{const p=await api.prices.retrieve();if(p.unit_amount!==799)throw new Error('Invalid price');}}});
 const service=await import('../lib/billing/service.ts');
 const sessions=await import('../lib/billing/session.ts');
 const recovery=await import('../lib/billing/restore.ts');
@@ -78,9 +78,9 @@ test('checkout creates a one-time payment session and reuses it on duplicate cli
 
 test('verified payment activates only the purchasing browser; signed webhook replay is harmless',async()=>{
  customers.get(customerId)!.email='owner@example.com';intentId='pi_test';
- intents.set(intentId,{id:intentId,customer:customerId,livemode:false,currency:'usd',status:'succeeded',amount_received:499,
- latest_charge:{id:'ch_test',paid:true,captured:true,amount_captured:499,refunded:false,disputed:false,receipt_url:'https://pay.stripe.com/receipts/test'}});
- Object.assign(checkouts.get(checkoutId)!,{status:'complete',payment_status:'paid',payment_intent:intentId,amount_total:499});
+ intents.set(intentId,{id:intentId,customer:customerId,livemode:false,currency:'usd',status:'succeeded',amount_received:799,
+ latest_charge:{id:'ch_test',paid:true,captured:true,amount_captured:799,refunded:false,disputed:false,receipt_url:'https://pay.stripe.com/receipts/test'}});
+ Object.assign(checkouts.get(checkoutId)!,{status:'complete',payment_status:'paid',payment_intent:intentId,amount_total:799});
  const event=evt('evt_checkout','checkout.session.completed',{id:checkoutId});
  await service.handleEvent(event);await service.handleEvent(event);
  assert.equal((await service.status(first!.id)).premium,true);assert.equal((await service.status(other!.id)).premium,false);

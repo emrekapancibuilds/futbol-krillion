@@ -53,7 +53,7 @@ export default function SubscriptionPanel({ onStatus }: { onStatus?: (status: Bi
   }
   function redirect(endpoint: string) { void run(async () => { const result = await billingRequest<{url:string}>(endpoint, {}); window.location.assign(result.url); }); }
   function play(mode: 'practice' | 'archive', day?: number) {
-    if (!status?.premium) { setMessage('Unlimited unlocks practice and the daily archive for $4.99, paid once.'); return; }
+    if (!status?.premium) { setMessage('Unlimited unlocks practice and the daily archive for $7.99, paid once.'); return; }
     void run(async () => { if (mode === 'practice') { router.push('/unlimited/play'); return; }
       const next = await billingRequest<DayInfo>('/api/games', {mode, day});
       sessionStorage.setItem('fk:archive', JSON.stringify(next)); router.push('/archive/play'); });

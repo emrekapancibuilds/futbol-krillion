@@ -18,7 +18,7 @@ Set `NEXT_PUBLIC_APP_URL` to the exact local or deployed origin. `NEXT_PUBLIC_SI
 - `SUPABASE_PUBLISHABLE_KEY`: publishable key for the separate Auth verification client.
 - `STRIPE_MODE=test`: use sandbox mode while developing.
 - `STRIPE_SECRET_KEY`: matching `sk_test_…` key.
-- `STRIPE_PRICE_ID`: active $4.99 USD non-recurring one-time price in that sandbox.
+- `STRIPE_PRICE_ID`: active $7.99 USD non-recurring one-time price in that sandbox.
 - `STRIPE_WEBHOOK_SECRET`: signing secret from your local listener or deployment's endpoint.
 - `STRIPE_AUTOMATIC_TAX=false`: leave disabled until business/tax settings are deliberately configured.
 
@@ -32,7 +32,7 @@ All `fk_*` tables are server-only with RLS enabled and no anon/authenticated gra
 
 ## Stripe Checkout and webhooks
 
-Checkout uses a $4.99 USD one-time payment with standard hosted Checkout (`managed_payments.enabled=false`). The client cannot choose the price or claim premium access. The server verifies the exact price, amount, currency, customer and successful captured PaymentIntent. Access has no renewal or expiry date. A full refund revokes it; an open/lost dispute suspends it; a won dispute restores it. Partial refunds keep access. View receipt opens only a receipt owned by the current browser.
+Checkout uses a $7.99 USD one-time payment with standard hosted Checkout (`managed_payments.enabled=false`). The client cannot choose the price or claim premium access. The server verifies the exact price, amount, currency, customer and successful captured PaymentIntent. Access has no renewal or expiry date. A full refund revokes it; an open/lost dispute suspends it; a won dispute restores it. Partial refunds keep access. View receipt opens only a receipt owned by the current browser.
 
 One-time purchases are stored separately in `fk_purchases`; the earlier subscription tables remain as historical records. A legacy subscription does not become a permanent unlock. No live subscription migration is performed by this change.
 

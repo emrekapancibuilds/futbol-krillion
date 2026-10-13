@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
-// Refund policy for the one-time $4.99 Unlimited unlock: a placeholder the owner may change (2026-10-12): 14 days, no
+// Refund policy for the one-time $7.99 Unlimited unlock: a placeholder the owner may change (2026-10-12): 14 days, no
 // questions asked, and always for a double charge or an unlock that never worked. It describes what the code does: a
 // full refund ends access, a partial refund keeps it (lib/billing/service.ts, charge.refunded).
 export const metadata: Metadata = {
@@ -15,13 +15,13 @@ export default function Refunds() {
   return (
     <LegalPage title="Refunds" effective="October 12, 2026">
       <p>
-        Unlimited is a one-time $4.99 purchase. The short version: if it isn&apos;t for you, email us within 14 days
+        Unlimited is a one-time $7.99 purchase. The short version: if it isn&apos;t for you, email us within 14 days
         and you&apos;ll get your money back, no questions asked.
       </p>
 
       <h2>Within 14 days</h2>
       <p>
-        Email {mail} from the address you paid with, within 14 days of buying, and we&apos;ll refund the full $4.99.
+        Email {mail} from the address you paid with, within 14 days of buying, and we&apos;ll refund the full $7.99.
         You don&apos;t need to give a reason.
       </p>
 

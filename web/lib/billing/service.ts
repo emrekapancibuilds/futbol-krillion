@@ -28,7 +28,7 @@ export async function syncCustomer(customerId: string, options: SyncOptions = {}
         // A complete session alone is not proof of payment. Verify exactly our product,
         // its amount, the PaymentIntent and its captured charge before granting access.
         if (lines.has_more || lines.data.length !== 1 || line.price?.id !== priceId() || line.quantity !== 1 ||
-            line.amount_subtotal !== 499 || line.currency !== 'usd' || line.amount_discount !== 0) continue;
+            line.amount_subtotal !== 799 || line.currency !== 'usd' || line.amount_discount !== 0) continue;
         const intentId = objectId(session.payment_intent);
         if (!intentId) continue;
         const intent = await api.paymentIntents.retrieve(intentId, { expand: ['latest_charge'] });
@@ -36,7 +36,7 @@ export async function syncCustomer(customerId: string, options: SyncOptions = {}
         const charge = typeof intent.latest_charge === 'object' ? intent.latest_charge : null;
         let state = 'unpaid';
         if (session.payment_status === 'paid' && intent.status === 'succeeded' && intent.amount_received === session.amount_total &&
-            intent.amount_received >= 499 && charge?.paid && charge.captured && charge.amount_captured === intent.amount_received) {
+            intent.amount_received >= 799 && charge?.paid && charge.captured && charge.amount_captured === intent.amount_received) {
           state = charge.refunded ? 'refunded' : 'paid';
           if (!charge.refunded && charge.disputed) {
             const disputes = await api.disputes.list({ charge: charge.id, limit: 100 });
@@ -142,7 +142,7 @@ export async function createCheckout(session: Visitor) {
       automatic_tax: { enabled: automaticTax },
       success_url: `${appUrl()}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl()}/billing/cancel`,
-      custom_text: { submit: { message: '$4.99 USD once for Unlimited practice and the daily archive. No recurring charges. Restore on another device using your payment email.' } },
+      custom_text: { submit: { message: '$7.99 USD once for Unlimited practice and the daily archive. No recurring charges. Restore on another device using your payment email.' } },
     }, { idempotencyKey: `fk-checkout-${record.id}` });
     if (!created.url) throw new Error('Stripe did not return a checkout URL');
     await checked(db().from('fk_checkouts').update({ stripe_session_id: created.id, url: created.url, expires_at: iso(created.expires_at) }).eq('id', record.id));

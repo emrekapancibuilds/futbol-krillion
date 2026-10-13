@@ -15,8 +15,8 @@ test('daily stays free; one-time pricing matches the existing pixel design on de
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:'tests/browser/daily-mobile.png',fullPage:true});
  await page.setViewportSize({width:1280,height:720});
- await page.goto('/unlimited');await closePitch(page);await expect(page.getByText('$4.99 USD · pay once',{exact:true})).toBeVisible();
- await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'})).toBeVisible();
+ await page.goto('/unlimited');await closePitch(page);await expect(page.getByText('$7.99 USD · pay once',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'})).toBeVisible();
  await expect(page.getByText(/One payment unlocks Unlimited/)).toBeVisible();
  await expect(page.getByText(/Renews monthly|Manage Subscription/)).toHaveCount(0);
  await page.screenshot({path:'tests/browser/billing-desktop.png',fullPage:true});
@@ -54,16 +54,16 @@ test('forged flags and credentials cannot unlock either premium API family',asyn
  const csrf=await page.request.post('/api/billing/checkout',{data:{},headers:{origin:'https://attacker.example'}});expect(csrf.status()).toBe(403);
  const large=await page.request.post('/api/unlimited/start',{data:{seen:Array(2000).fill('p0123456789')},headers:{origin:'http://localhost:3100'}});
  expect([402,503]).toContain(large.status());
- await page.goto('/unlimited/play');await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'})).toBeVisible();
+ await page.goto('/unlimited/play');await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'})).toBeVisible();
  await expect(page.getByRole('button',{name:'MIXED',exact:true})).toHaveCount(0);
 });
 
 test('checkout provider errors leave free play available',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
  await page.route('**/api/billing/checkout',r=>r.fulfill({status:503,json:{error:'Checkout temporarily unavailable.'}}));
- await page.goto('/unlimited');await expect(pitch(page)).toBeVisible();await pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).click();
+ await page.goto('/unlimited');await expect(pitch(page)).toBeVisible();await pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'}).click();
  await expect(pitch(page)).toContainText('Checkout temporarily unavailable');
- await closePitch(page);await page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'}).click();
+ await closePitch(page);await page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'}).click();
  await expect(page.getByRole('status')).toContainText('Checkout temporarily unavailable');
  await page.goto('/');await expect(page.getByRole('button',{name:'KICK OFF',exact:true})).toBeEnabled();
 });
@@ -72,7 +72,7 @@ test('anonymous bootstrap is coalesced before checkout',async({page})=>{
  let requests=0;let release!:()=>void;
  const ready=new Promise<void>(resolve=>{release=resolve;});
  await page.route('**/api/billing/session',async r=>{requests++;await ready;await r.fulfill({json:free});});
- await page.goto('/unlimited');const upgrade=page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
+ await page.goto('/unlimited');const upgrade=page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
  await expect(upgrade).toHaveCount(0);await page.evaluate(()=>window.dispatchEvent(new Event('focus')));release();   // no buy button (or pop-up) until the bootstrap is back
  await closePitch(page);await expect(upgrade).toBeEnabled();expect(requests).toBe(1);
 });
@@ -173,7 +173,7 @@ test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE an
 test('non-subscribers get the unlock pop-up first, buy button above the message; closing it leaves the page',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
  await page.goto('/unlimited');
- const note=pitch(page).getByText(/Hey, I.m Emre/);const buy=pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
+ const note=pitch(page).getByText(/Hey, I.m Emre/);const buy=pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
  await expect(buy).toBeVisible();await expect(note).toBeVisible();
  expect((await buy.boundingBox())!.y).toBeLessThan((await note.boundingBox())!.y);
  await page.getByRole('button',{name:'Close',exact:true}).click();await expect(pitch(page)).toHaveCount(0);
@@ -183,7 +183,7 @@ test('non-subscribers get the unlock pop-up first, buy button above the message;
  await expect(perks).toBeVisible();
  await expect(page.getByRole('region',{name:"Today's daily"})).toHaveCount(0);
  await expect(page.getByText(/Wrexham|two-club|No ads/)).toHaveCount(0);
- const panelNote=page.getByText(/Hey, I.m Emre/);const panelBuy=page.getByRole('button',{name:'UNLOCK UNLIMITED — $4.99'});
+ const panelNote=page.getByText(/Hey, I.m Emre/);const panelBuy=page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
  expect((await perks.boundingBox())!.y).toBeLessThan((await panelBuy.boundingBox())!.y);
  expect((await panelBuy.boundingBox())!.y).toBeLessThan((await panelNote.boundingBox())!.y);   // button above the message here too
  await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toHaveClass(/secondary/);
