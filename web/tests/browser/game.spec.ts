@@ -230,7 +230,7 @@ test('lost access: Restore Purchase tells people to email the owner (restore ema
  await page.getByRole('button',{name:'Restore Purchase'}).click();
  const help=page.getByTestId('restore-help');
  await expect(help).toContainText(/lost access|new device/i);
- await expect(help.getByRole('link',{name:'emre.kapanci@gmail.com'})).toHaveAttribute('href',/^mailto:emre\.kapanci@gmail\.com/);
+ await expect(help.getByRole('link',{name:'futkrill@gmail.com'})).toHaveAttribute('href',/^mailto:futkrill@gmail\.com/);
  await expect(page.getByLabel('Email used at checkout')).toHaveCount(0);                 // no form that can't send
  await expect(page.getByRole('button',{name:'SEND RESTORE LINK'})).toHaveCount(0);
  expect(emailRequests).toBe(0);
@@ -249,7 +249,7 @@ test('the refund policy page exists and is linked from the terms, the legal page
  await expect(page).toHaveTitle(/Refunds/);
  await expect(page.locator('article')).toContainText('14 days');
  await expect(page.locator('article')).toContainText(/full refund.*(ends|removes|no longer)/i);        // matches what the code does
- await expect(page.locator('article').getByRole('link',{name:'emre.kapanci@gmail.com'}).first()).toHaveAttribute('href',/^mailto:/);
+ await expect(page.locator('article').getByRole('link',{name:'futkrill@gmail.com'}).first()).toHaveAttribute('href',/^mailto:/);
  for (const path of ['/terms','/privacy']) {
   await page.goto(path);
   await expect(page.locator('article').getByRole('link',{name:/Refunds?$/}).first()).toHaveAttribute('href','/refunds');
