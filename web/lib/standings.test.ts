@@ -38,3 +38,35 @@ test("the axis hugs the curve and always fits the player's score", () => {
   assert.ok(s.max >= 1000 && s.max % 250 === 0);
   assert.ok(mockStandings("daily:3", 6800).max >= 6800);
 });
+
+// User, 2026-10-13: 1,260 on a daily showed "better than 99%". It should be about 95-96%, and 99% should only start
+// around 1,500.
+const DAYS = Array.from({ length: 80 }, (_, i) => (i % 2 ? `daily:${i}` : `unlimited:mixed:${i}`));
+
+test("1,260 is about the 95th-96th percentile, on every day", () => {
+  const p = DAYS.map((seed) => mockStandings(seed, 1260).percentile);
+  assert.ok(Math.min(...p) >= 94 && Math.max(...p) <= 97, `${Math.min(...p)}..${Math.max(...p)}`);
+  const mean = p.reduce((a, b) => a + b, 0) / p.length;
+  assert.ok(mean >= 95 && mean <= 96.5, `mean ${mean}`);
+});
+
+test("the 99th percentile only starts around 1,500: never below 1,450, always from 1,800", () => {
+  for (const seed of DAYS) {
+    assert.ok(mockStandings(seed, 1450).percentile < 99, `${seed} reached 99 at 1,450`);
+    assert.equal(mockStandings(seed, 1800).percentile, 99, `${seed} below 99 at 1,800`);
+  }
+  const at1500 = DAYS.map((seed) => mockStandings(seed, 1500).percentile);
+  assert.ok(Math.min(...at1500) >= 98, `${Math.min(...at1500)}`);       // 1,500 is 98 or 99, never lower
+});
+
+test("the middle of the field is unchanged in spirit: 500 is a bit below half, 1,000 is about 86-88", () => {
+  const mid = (score: number) => DAYS.map((s) => mockStandings(s, score).percentile).sort((a, b) => a - b)[40];
+  assert.ok(mid(500) >= 33 && mid(500) <= 47, `${mid(500)}`);
+  assert.ok(mid(1000) >= 83 && mid(1000) <= 90, `${mid(1000)}`);
+});
+
+test("the curve has a visible tail past 1,260, so the marker doesn't sit past the end of the curve", () => {
+  const s = mockStandings("daily:4", 1260);
+  const lastTall = s.curve.reduce((acc, v, i) => (v > 0.02 ? i : acc), 0);       // last bar above 2% of the peak
+  assert.ok((lastTall / s.curve.length) * s.max > 1260, `curve ends at ${(lastTall / s.curve.length) * s.max}`);
+});

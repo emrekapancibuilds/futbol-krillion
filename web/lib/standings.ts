@@ -3,6 +3,10 @@
 //
 // Shape: a few blank cards, then a bell of totals with a mild lean to the right (a skew-normal: the odd rare pick
 // pushes some totals up). The user wanted it close to symmetrical rather than a long-tailed curve.
+//
+// Calibration (user, 2026-10-13): a total of 1,260 is about the 95th-96th percentile, and the 99th percentile starts
+// around 1,500. The shape below is fitted to that (roughly: 500 -> 40%, 1,000 -> 86%, 1,260 -> 95.8%, 1,500 -> 98.9%);
+// each day stretches it sideways a little (DAY_STRETCH) so days differ without moving those marks far.
 
 export type Standings = {
   players: number;      // field size, 10,000-20,000
@@ -13,7 +17,10 @@ export type Standings = {
 
 const BINS = 56;
 const BLANK_SHARE = 0.03;   // players who scored nothing
-const SKEW = 1.2;           // skew-normal shape: 0 is a perfect bell, higher leans right
+const SKEW = 1.5;           // skew-normal shape: 0 is a perfect bell, higher leans right
+const LOCATION = 290;       // skew-normal location and scale, in points, for an average day
+const SCALE = 478;
+const DAY_STRETCH = 0.03;   // each day is this much wider or narrower than average, at most
 const STEPS = 600;          // numeric integration steps over 0..TOP
 const TOP = 7000;
 
@@ -21,9 +28,8 @@ const TOP = 7000;
 export function mockStandings(seed: string, score: number): Standings {
   const rand = mulberry32(hash(seed));
   const players = 10_000 + Math.floor(rand() * 10_001);
-  const centre = 480 + rand() * 200;                    // where most of a day's totals land: 480-680
-  const spread = centre * (0.46 + rand() * 0.08);
-  const density = (x: number) => skewNormal(x, centre - 0.5 * spread, spread, SKEW);
+  const stretch = 1 + (rand() * 2 - 1) * DAY_STRETCH;   // an easier day shifts the whole bell right, a harder one left
+  const density = (x: number) => skewNormal(x, LOCATION * stretch, SCALE * stretch, SKEW);
 
   // cumulative share of the (non-blank) field below x, by integration
   const dx = TOP / STEPS;
