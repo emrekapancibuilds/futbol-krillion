@@ -5,34 +5,16 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
+import { FLAME } from "@/lib/game/flame-art.ts";
 import { bonusForStreak } from "@/lib/game/streak.ts";
 
-// 12 x 16 pixels. r = red outer flame, o = orange, y = yellow core. Drawn as SVG rects so it stays crisp at any size.
-const FLAME = [
-  "......r.....",
-  ".....rr.....",
-  ".....rro....",
-  "....rroo..r.",
-  "....rrooo.rr",
-  "...rrooooorr",
-  "...rroyyoorr",
-  "..rrooyyyoor",
-  "..rrooyyyyor",
-  ".rrooyyyyyor",
-  ".rrooyyyyyoo",
-  ".rrooyyyyyor",
-  ".rrrooyyyoor",
-  "..rrroooooor",
-  "...rrrrrrrr.",
-  "....rrrrrr..",
-];
 const LIT = { r: "#e8412b", o: "#ff9a1f", y: "#ffe45c" };
 const OUT = { r: "#4a4f66", o: "#6c7390", y: "#9aa1bb" };
 
 export function Flame({ size = 32, burnt = false }: { size?: number; burnt?: boolean }) {
   const colors = burnt ? OUT : LIT;
   return (
-    <svg width={size * 0.75} height={size} viewBox="0 0 12 16" shapeRendering="crispEdges" aria-hidden="true">
+    <svg width={size * 0.75} height={size} viewBox="0 0 12 16" shapeRendering="crispEdges" aria-hidden="true" style={{ overflow: "visible" }}>
       {FLAME.flatMap((row, y) => [...row].map((c, x) => (c === "." ? null :
         <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={colors[c as keyof typeof LIT]} />)))}
     </svg>
@@ -51,7 +33,7 @@ export function StreakBadge({ streak }: { streak: number }) {
                     animate={{ scale: 1, rotate: 0, opacity: 1 }}
                     exit={still ? { opacity: 0 } : { scale: 0.2, y: 8, opacity: 0 }}
                     transition={{ type: "spring", stiffness: 380, damping: 14 }}>
-          <motion.span className="flame" style={{ originY: 1, display: "inline-flex" }}
+          <motion.span className="flame" style={{ originY: 1, display: "inline-flex", marginLeft: -3, marginRight: 1 }}
                        animate={still ? { scale: grow } : { scaleY: [grow, grow * 1.1, grow * 0.95, grow * 1.07, grow],
                                                             scaleX: [grow, grow * 0.95, grow * 1.03, grow * 0.97, grow] }}
                        transition={still ? { duration: 0 } : { repeat: Infinity, duration: 0.8, ease: "easeInOut" }}>
