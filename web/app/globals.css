@@ -422,3 +422,25 @@ footer.small a { color: inherit; }
 .unlock-modal .billing-heading { justify-content: space-between; }
 .modal-close { background: none; border: 0; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 8px; }
 .modal-close:hover { color: var(--ink); }
+
+/* Streak flame and bonus (components/Streak.tsx). */
+.streak-badge { display: inline-flex; align-items: center; gap: 6px; justify-self: center; }
+.streak-badge .streak-count { font-family: var(--font-display), monospace; font-size: 20px; color: #ffb02e; text-shadow: 0 0 8px rgba(255, 120, 30, 0.6); }
+.streak-badge .streak-next { font-size: 12px; letter-spacing: 1px; color: var(--muted); }
+.streak-bonus, .tier-bonus {
+  font-family: var(--font-display), monospace;
+  color: #ffb02e;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(255, 120, 30, 0.6);
+}
+.tier-bonus { margin-top: 4px; font-size: 18px; }
+.streak-lost { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 40px; }
+.streak-lost .flame-out { position: relative; display: inline-flex; width: 26px; height: 34px; align-items: flex-end; justify-content: center; }
+.streak-lost .smoke { position: absolute; bottom: 14px; width: 6px; height: 6px; background: #8d94ad; }
+.streak-lost-text { font-family: var(--font-display), monospace; letter-spacing: 1px; color: var(--red); }
+.streak-lost-text small { color: var(--muted); }
+.rounds .tile-bonus { display: block; font-size: 11px; color: #ffb02e; line-height: 1; }
+.streak-badge .streak-next { white-space: nowrap; }
+@media (max-width: 480px) {
+  .panel .streak-badge .streak-next { display: none; }   /* the result card still says what the next bonus is */
+}

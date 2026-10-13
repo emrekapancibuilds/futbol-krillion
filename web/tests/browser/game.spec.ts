@@ -258,3 +258,35 @@ test('the refund policy page exists and is linked from the terms, the legal page
  await page.goto('/unlimited');
  await expect(pitch(page).getByRole('link',{name:/14-day refunds/})).toHaveAttribute('href','/refunds');
 });
+
+test('streak: back-to-back correct answers earn a growing bonus, a pass loses it, and the flame lights and burns out',async({page})=>{
+ test.setTimeout(120000);
+ await page.route('**/api/round/start',r=>r.fulfill({json:{text:'Streak fixture',token:'t',previewMs:0,deadline:Date.now()+90000,now:Date.now()}}));
+ await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Fixture Player',tier:1,points:10,fact:'fixture',proof:'proof'}}));
+ await page.route('**/api/round/pass',r=>r.fulfill({json:{status:'passed',proof:'proof'}}));
+ const led=page.locator('.topbar .led');
+ const answer=async()=>{await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();await expect(page.getByRole('button',{name:/NEXT ROUND|FINAL WHISTLE/})).toBeVisible({timeout:30000});};
+ await page.goto('/');await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
+ await expect(page.getByTestId('streak-flame')).toHaveCount(0);                               // no streak yet
+ await answer();                                                                               // round 1: correct
+ await expect(page.getByTestId('streak-flame')).toBeVisible();                                // the flame is lit...
+ await expect(page.getByTestId('streak-bonus')).toHaveCount(0);                               // ...but the first answer earns no bonus
+ await expect(led).toHaveText(/· 10$/);
+ await page.getByRole('button',{name:'NEXT ROUND'}).click();
+ await expect(page.getByTestId('streak-flame')).toContainText('x1');                          // lit during the next round too
+ await answer();                                                                               // round 2: correct in a row -> +10
+ await expect(page.getByTestId('streak-bonus')).toContainText('+10');
+ await expect(led).toHaveText(/· 30$/);                                                        // 10 + 10 + 10 bonus
+ await page.getByRole('button',{name:'NEXT ROUND'}).click();
+ await expect(page.getByTestId('streak-flame')).toContainText('x2');
+ await page.getByRole('button',{name:'PASS',exact:true}).click();await page.getByRole('button',{name:'YES, PASS',exact:true}).click();
+ await expect(page.getByTestId('streak-lost')).toBeVisible();                                  // the streak burns out
+ await expect(page.getByTestId('streak-lost')).toContainText(/STREAK LOST/i);
+ await expect(led).toHaveText(/· 30$/);
+ await page.getByRole('button',{name:'NEXT ROUND'}).click();
+ await expect(page.getByTestId('streak-flame')).toHaveCount(0);                               // gone for round 4
+ await answer();                                                                               // round 4: correct again, streak restarts at 1
+ await expect(page.getByTestId('streak-flame')).toBeVisible();
+ await expect(page.getByTestId('streak-bonus')).toHaveCount(0);
+ await expect(led).toHaveText(/· 40$/);
+});
