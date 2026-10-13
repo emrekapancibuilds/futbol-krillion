@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { RESTORE_BY_EMAIL, SUPPORT_EMAIL } from '@/lib/support.ts';
 import { useEffect, useRef, useState } from 'react';
 import { billingRequest, type BillingStatus } from './SubscriptionPanel';
 export default function BillingReturn({kind}: {kind:'success'|'cancel'|'restore'}) {
@@ -62,6 +63,6 @@ export default function BillingReturn({kind}: {kind:'success'|'cancel'|'restore'
     <p role="status" aria-live="polite">{message}</p>
     {kind === 'restore' && token && accessToken && <button className="btn" disabled={busy} onClick={restore}>{busy ? 'VERIFYING…' : 'RESTORE TO THIS BROWSER'}</button>}
     <Link className="btn billing-back" href={premium ? "/unlimited/play" : "/"}>{premium ? 'PLAY UNLIMITED' : 'RETURN TO THE GAME'}</Link>
-    <p className="muted billing-terms">Need access on another device? Choose Restore Purchase in the game and use your payment email.</p>
+    <p className="muted billing-terms">{RESTORE_BY_EMAIL ? 'Need access on another device? Choose Restore Purchase in the game and use your payment email.' : `Lost access or on another device? Email ${SUPPORT_EMAIL} from the address you paid with.`}</p>
   </section></div></main>;
 }

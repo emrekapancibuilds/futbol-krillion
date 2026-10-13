@@ -2,7 +2,10 @@ import Link from "next/link";
 
 // Shared frame for the Privacy and Terms pages: logo, one long panel, links between the two.
 
-export const CONTACT = "emre.kapanci@gmail.com";   // public on both pages (owner's choice, 2026-10-11)
+import { RESTORE_BY_EMAIL, SUPPORT_EMAIL } from "@/lib/support.ts";
+
+export const CONTACT = SUPPORT_EMAIL;
+export { RESTORE_BY_EMAIL };
 
 export function Mail() {
   return <a href={`mailto:${CONTACT}`}>{CONTACT}</a>;

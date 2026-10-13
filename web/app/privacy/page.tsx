@@ -14,7 +14,7 @@ export default function Privacy() {
       <p>
         Futkrill offers a free daily football trivia game and optional paid Unlimited access. Your scores
         stay in your browser. Purchase access uses an essential session cookie, Stripe payment records and
-        Supabase. Restoring a purchase verifies your email with a passwordless Supabase link. The game runs no
+        Supabase. If you lose access, you email us and we restore it. The game runs no
         advertising or analytics trackers.
       </p>
       <p>The details follow.</p>
@@ -43,7 +43,7 @@ export default function Privacy() {
       <p>
         Rounds are tracked with a signed ticket that your browser holds and sends back. It says which round
         you&apos;re playing and when your time runs out. Paid rounds are also tied to an anonymous browser session.
-        We store purchase, recovery and game-session records needed to enforce paid access, but do not store
+        We store purchase and game-session records needed to enforce paid access, but do not store
         a history of the answers you type or sync your scores.
       </p>
 
@@ -51,7 +51,7 @@ export default function Privacy() {
       <p>
         We set an essential HttpOnly session cookie to recognize your browser for purchases and paid play. Only a
         hash of its random credential is stored in the database. Clearing the cookie removes this browser&apos;s
-        access until you verify your payment email through Restore Purchase. Stripe may use its own cookies on
+        access until we restore it for you (if you lose access, email {mail} from your payment address). Stripe may use its own cookies on
         its hosted payment and receipt pages.
       </p>
 
@@ -85,10 +85,9 @@ export default function Privacy() {
         <a href="https://stripe.com/privacy">privacy policy</a>.
       </p>
       <p>
-        Supabase stores the records used for browser sessions and purchase access. If you use Restore Purchase,
-        Supabase Auth creates an email identity and sends a verification link. No password is required. We compare
-        the verified email with the current Stripe payment email before attaching paid access to your browser.
-        Recovery requests expire after 15 minutes and are single-use. Verification does not restore local scores.
+        Supabase stores the records used for browser sessions and purchase access. If you lose access, email {mail}
+        from the address you paid with: we check it against the payment in Stripe and restore access to your
+        browser. Restoring does not bring back local scores or streaks.
       </p>
 
       <h2>Your data, your call</h2>

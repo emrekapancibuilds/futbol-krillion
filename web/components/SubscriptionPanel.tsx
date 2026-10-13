@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { DayInfo } from '@/lib/game/types.ts';
 import UnlockPitch from '@/components/UnlockPitch';
+import { RESTORE_BY_EMAIL, SUPPORT_EMAIL } from '@/lib/support.ts';
 export type BillingStatus = { premium: boolean; canManage: boolean; configured: boolean; restoreAvailable: boolean;
   status: string; purchasedAt: string | null };
 let sessionRequest: Promise<BillingStatus> | null = null;
@@ -93,7 +94,10 @@ export default function SubscriptionPanel({ onStatus }: { onStatus?: (status: Bi
       <button className="linkish" onClick={() => setRestoreOpen(v => !v)} aria-expanded={restoreOpen}>Restore Purchase</button>
       <button className="linkish" disabled={busy} onClick={() => void run(refresh)}>Refresh status</button>
     </div>
-    {restoreOpen && <form className="stack restore-form" onSubmit={restore}>
+    {restoreOpen && !RESTORE_BY_EMAIL && <div className="stack restore-help" data-testid="restore-help">
+      <p>Lost access, or on a new device? Email <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Futkrill: restore my Unlimited')}`}>{SUPPORT_EMAIL}</a> from the address you paid with and I&apos;ll get you back in.</p>
+    </div>}
+    {restoreOpen && RESTORE_BY_EMAIL && <form className="stack restore-form" onSubmit={restore}>
       <label htmlFor="restore-email">Email used at checkout</label>
       <input id="restore-email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} />
       <button className="btn secondary" disabled={busy}>SEND RESTORE LINK</button>
