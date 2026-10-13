@@ -14,7 +14,7 @@ export default function Unlimited() {
       <div className="middle">
         <UnlimitedHub />
       </div>
-      <footer className="small"><Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link></footer>
+      <footer className="small"><Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link> · <Link href="/refunds">Refunds</Link></footer>
     </main>
   );
 }

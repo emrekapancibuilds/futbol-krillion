@@ -243,3 +243,18 @@ test('the terms and privacy pages say to contact the owner for lost access, not 
   await expect(page.locator('article')).toContainText(/lose access|lost access/i);
  }
 });
+
+test('the refund policy page exists and is linked from the terms, the legal pages and the unlock pitch',async({page})=>{
+ const res=await page.goto('/refunds');expect(res!.status()).toBe(200);
+ await expect(page).toHaveTitle(/Refunds/);
+ await expect(page.locator('article')).toContainText('14 days');
+ await expect(page.locator('article')).toContainText(/full refund.*(ends|removes|no longer)/i);        // matches what the code does
+ await expect(page.locator('article').getByRole('link',{name:'emre.kapanci@gmail.com'}).first()).toHaveAttribute('href',/^mailto:/);
+ for (const path of ['/terms','/privacy']) {
+  await page.goto(path);
+  await expect(page.locator('article').getByRole('link',{name:/Refunds?$/}).first()).toHaveAttribute('href','/refunds');
+ }
+ await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
+ await page.goto('/unlimited');
+ await expect(pitch(page).getByRole('link',{name:/14-day refunds/})).toHaveAttribute('href','/refunds');
+});

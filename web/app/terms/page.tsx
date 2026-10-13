@@ -68,7 +68,8 @@ export default function Terms() {
         Unlimited costs $4.99 USD as a one-time payment, with no recurring charges. Applicable taxes are displayed
         at Checkout. Stripe handles payment. Your purchase unlocks Unlimited practice and the daily archive
         for as long as the game is available. A fully refunded payment no longer grants access; access may be
-        suspended while a payment is disputed. Contact us with purchase questions or refund requests.
+        suspended while a payment is disputed. Refunds follow our <Link href="/refunds">refund policy</Link>: in short, a full
+        refund within 14 days, no questions asked.
       </p>
       <p>
         Access is recognized in the purchasing browser. If you lose access or want it on another device, email{" "}
