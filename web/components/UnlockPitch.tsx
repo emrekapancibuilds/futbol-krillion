@@ -1,6 +1,8 @@
 // The Unlimited pitch: the buy button first, then Emre's note, then what it is and what it costs. Shown inside the
 // pop-up people get on arriving at /unlimited, and in the panel under the perks (user, 2026-10-12: button above the note).
 
+import Link from "next/link";
+
 export default function UnlockPitch({ busy, onUnlock }: { busy: boolean; onUnlock: () => void }) {
   return <>
     <button className="btn" disabled={busy} onClick={onUnlock}>{busy ? 'PLEASE WAIT…' : 'UNLOCK UNLIMITED — $4.99'}</button>
@@ -11,6 +13,6 @@ export default function UnlockPitch({ busy, onUnlock }: { busy: boolean; onUnloc
     </div>
     <p>Unlimited practice + every previous daily.</p>
     <p className="price">$4.99 USD · pay once</p>
-    <p className="muted billing-terms">One payment unlocks Unlimited. No recurring charges. Applicable taxes are shown at checkout. No account required.</p>
+    <p className="muted billing-terms">One payment unlocks Unlimited. No recurring charges. Applicable taxes are shown at checkout. No account required. <Link href="/refunds">14-day refunds</Link>.</p>
   </>;
 }

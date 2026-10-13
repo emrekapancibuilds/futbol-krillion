@@ -318,7 +318,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
         )}
       </AnimatePresence>
 
-      {day && <footer className="small">{unlimited ? "Unlimited · " : ""}Data as of {day.snapshot} · new daily at 00:00 UTC · <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link></footer>}
+      {day && <footer className="small">{unlimited ? "Unlimited · " : ""}Data as of {day.snapshot} · new daily at 00:00 UTC · <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link> · <Link href="/refunds">Refunds</Link></footer>}
     </main>
   );
 }
