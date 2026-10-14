@@ -1,18 +1,19 @@
 import { MAX_STREAK_BONUS } from "./game/streak.ts";
 
-// Tier names, points and quips (spec §2). Icons are the pixel art in public/art.
+// Tier names, points and quips (spec §2). Points: 5, 10, 20, 30, 60, 100, 200 (user, 2026-10-14; they were 10 ... 1,000).
+// pipeline/jobless/config.py has the same ladder and the prompt files carry it; lib/tiers.test.ts checks they agree. Icons are the pixel art in public/art.
 export const TIERS = [
-  { tier: 1, name: "World Cup Bandwagon", points: 10, quip: "You only watch the World Cup.", icon: "/art/tier-1-bandwagon.png" },
-  { tier: 2, name: "Glory Hunter", points: 40, quip: "Supports whoever won the league last season.", icon: "/art/tier-2-glory-hunter.png" },
-  { tier: 3, name: "Part-Time Fan", points: 80, quip: "Catches the highlights. Respectable.", icon: "/art/tier-3-part-time-fan.png" },
-  { tier: 4, name: "Season Ticket Holder", points: 160, quip: "Rain or shine, you're in your seat.", icon: "/art/tier-4-season-ticket.png" },
-  { tier: 5, name: "True Analyst", points: 320, quip: "Owns a tactics board. Uses it.", icon: "/art/tier-5-true-analyst.png" },
-  { tier: 6, name: "Insane Ball Knowledge", points: 640, quip: "Genuinely concerning ball knowledge.", icon: "/art/tier-6-insane-ball-knowledge.png" },
-  { tier: 7, name: "Jobless", points: 1000, quip: "Go outside. Seriously.", icon: "/art/tier-7-jobless.png" },
+  { tier: 1, name: "World Cup Bandwagon", points: 5, quip: "You only watch the World Cup.", icon: "/art/tier-1-bandwagon.png" },
+  { tier: 2, name: "Glory Hunter", points: 10, quip: "Supports whoever won the league last season.", icon: "/art/tier-2-glory-hunter.png" },
+  { tier: 3, name: "Part-Time Fan", points: 20, quip: "Catches the highlights. Respectable.", icon: "/art/tier-3-part-time-fan.png" },
+  { tier: 4, name: "Season Ticket Holder", points: 30, quip: "Rain or shine, you're in your seat.", icon: "/art/tier-4-season-ticket.png" },
+  { tier: 5, name: "True Analyst", points: 60, quip: "Owns a tactics board. Uses it.", icon: "/art/tier-5-true-analyst.png" },
+  { tier: 6, name: "Insane Ball Knowledge", points: 100, quip: "Genuinely concerning ball knowledge.", icon: "/art/tier-6-insane-ball-knowledge.png" },
+  { tier: 7, name: "Jobless", points: 200, quip: "Go outside. Seriously.", icon: "/art/tier-7-jobless.png" },
 ] as const;
 
 // 7 rounds of Jobless, plus what a perfect streak earns (lib/game/streak.ts).
-export const MAX_SCORE = 7_000 + MAX_STREAK_BONUS;
+export const MAX_SCORE = 7 * 200 + MAX_STREAK_BONUS;
 
 /** Tunnel colours for the reveal: wall, darker wall stripe, and the bright trim/light of each tier. */
 export const TIER_COLORS: Record<number, { wall: string; stripe: string; light: string }> = {

@@ -318,7 +318,7 @@ test('the end screen shows a column per round, taller for rarer answers, and tap
  await page.route('**/api/round/reveal',r=>r.fulfill({json:REVEAL}));
  const mk=(tier:number|null,points:number)=>({status:tier?'accepted':'missed',points,tier,name:tier?'Someone':undefined,fact:'f',key:'k',text:'Name a player who played for Man City'});
  const day=await (await page.request.get('/api/daily')).json();
- await page.addInitScript(([n,results])=>localStorage.setItem(`fk:day:${n}`,JSON.stringify({results})),[day.number,[mk(7,1000),mk(1,10),mk(null,0),mk(3,80),mk(1,10),mk(1,10),mk(3,80)]] as const);
+ await page.addInitScript(([n,results])=>localStorage.setItem(`fk:day:${n}`,JSON.stringify({results})),[day.number,[mk(7,200),mk(1,5),mk(null,0),mk(3,20),mk(1,5),mk(1,5),mk(3,20)]] as const);
  await page.goto('/');
  await expect(page.locator('.col')).toHaveCount(7);
  const levels=await page.locator('.col').evaluateAll(els=>els.map(e=>Number(e.getAttribute('data-level'))));
@@ -338,7 +338,7 @@ test('the PITCH INVASION sign on a Jobless result has room around it, on a phone
  test.setTimeout(60000);
  await page.setViewportSize({width:375,height:812});
  await page.route('**/api/round/start',r=>r.fulfill({json:{text:'Name a player',token:'t',previewMs:0,deadline:Date.now()+90000,now:Date.now()}}));
- await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Andrea Mancini',tier:7,points:1000,fact:'Manchester City, 2010-2012',proof:'p'}}));
+ await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Andrea Mancini',tier:7,points:200,fact:'Manchester City, 2010-2012',proof:'p'}}));
  await page.goto('/');await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
  await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();
  const next=page.getByRole('button',{name:'NEXT QUESTION'});

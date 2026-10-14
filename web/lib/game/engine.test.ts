@@ -6,7 +6,7 @@ import { answerRound, ANSWER_MS, dayFor, GRACE_MS, passRound, pickUnlimited, PRE
 const SECRET = "s";
 const answers = Array.from({ length: 30 }, (_, i) => ({
   id: `p${i}`, name: i === 0 ? "Thierry Henry" : `Player ${String.fromCharCode(65 + (i % 26))}${i}`,
-  tier: 1 + (i % 7), points: [10, 40, 80, 160, 320, 640, 1000][i % 7], fact: `fact ${i}`, variants: [] as string[],
+  tier: 1 + (i % 7), points: [5, 10, 20, 30, 60, 100, 200][i % 7], fact: `fact ${i}`, variants: [] as string[],
 }));
 answers[0].variants = ["Thierry Henry"];
 const DATA: GameData = {
@@ -43,7 +43,7 @@ test("an answer in time is checked; a wrong one is rejected; a late one expires"
   const ok = answerRound(DATA, { day: 1, round: 0 }, "Thierry Henry", r.token, 10_000, SECRET);
   assert.equal(ok.status, "accepted");
   assert.equal(ok.status === "accepted" && ok.name, "Thierry Henry");
-  assert.equal(ok.status === "accepted" && ok.points, 10);
+  assert.equal(ok.status === "accepted" && ok.points, 5);
   assert.equal(answerRound(DATA, { day: 1, round: 0 }, "Colin Hendry", r.token, 10_000, SECRET).status, "rejected");
   assert.equal(answerRound(DATA, { day: 1, round: 0 }, "Thierry Henry", r.token, r.deadline + GRACE_MS + 1, SECRET).status, "expired");
 });
@@ -112,7 +112,7 @@ test("the next Unlimited prompt is one not seen yet, falling back to any once al
 });
 
 test("the answer list only ever shows the top answers of each tier, never the whole list", () => {
-  const many = Array.from({ length: 25 }, (_, i) => ({ id: `m${i}`, name: `Many ${i}`, tier: 1, points: 10, fact: "", variants: [] as string[] }));
+  const many = Array.from({ length: 25 }, (_, i) => ({ id: `m${i}`, name: `Many ${i}`, tier: 1, points: 5, fact: "", variants: [] as string[] }));
   const BIG: GameData = { ...DATA, prompt: () => ({ id: "pBig", text: "t", entityType: "player", answers: many }) };
   const r = startRound(BIG, { day: 1, round: 0 }, 0, SECRET)!;
   const passed = passRound(BIG, { day: 1, round: 0 }, r.token, SECRET);

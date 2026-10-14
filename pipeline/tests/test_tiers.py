@@ -32,8 +32,13 @@ def test_rank_out_of_range():
 
 
 def test_names_and_points():
-    assert (tier_name(1), tier_points(1)) == ("World Cup Bandwagon", 10)
-    assert (tier_name(7), tier_points(7)) == ("Jobless", 1000)
+    assert (tier_name(1), tier_points(1)) == ("World Cup Bandwagon", 5)
+    assert (tier_name(7), tier_points(7)) == ("Jobless", 200)
+
+
+def test_points_ladder():
+    """User call 2026-10-14: 5, 10, 20, 30, 60, 100, 200."""
+    assert [tier_points(t) for t in range(1, 8)] == [5, 10, 20, 30, 60, 100, 200]
 
 
 def test_player_cutoffs_are_less_strict_in_the_middle():

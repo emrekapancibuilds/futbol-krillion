@@ -55,7 +55,7 @@ def test_only_scheduled_prompts_get_answer_files_with_deduped_variants(tmp_path)
     prompt = json.loads((tmp_path / "web" / "prompts" / "pA.json").read_text(encoding="utf-8"))
     assert prompt["text"] == "Name a player who played for Arsenal" and prompt["entityType"] == "player"
     first, second = prompt["answers"]                     # most famous first
-    assert (first["id"], first["name"], first["tier"], first["points"]) == ("Q1", "Thierry Henry", 1, 10)
+    assert (first["id"], first["name"], first["tier"], first["points"]) == ("Q1", "Thierry Henry", 1, 5)
     assert first["variants"] == ["Thierry Henry", "Titi"]
     assert second["fact"] == "Arsenal, 1899–1900"
 
@@ -195,3 +195,11 @@ def test_the_fallback_pool_is_the_scheduled_prompts_so_it_never_points_at_a_miss
     pool = json.loads((tmp_path / "web" / "fallback-prompts.json").read_text())
     assert pool == ["pA"]                                            # scheduled twice, listed once
     assert all((tmp_path / "web" / "prompts" / f"{p}.json").exists() for p in pool)
+
+
+def test_answer_points_come_from_the_tier_table_not_a_stale_export(tmp_path):
+    """The export fixture still carries the old 10 / 1000 points; the site must get today's ladder (5 ... 200)."""
+    make_export(tmp_path / "export")
+    webdata.build(tmp_path / "export", tmp_path / "web")
+    answers = json.loads((tmp_path / "web" / "prompts" / "pA.json").read_text())["answers"]
+    assert {a["tier"]: a["points"] for a in answers} == {7: 200, 1: 5}

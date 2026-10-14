@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { matchAnswer, matchDetail, normalize, prepareGlobal, preparePrompt, type Answer } from "./match.ts";
 
 const a = (id: string, name: string, tier: number, variants: string[] = [name]): Answer =>
-  ({ id, name, tier, points: [0, 10, 40, 80, 160, 320, 640, 1000][tier], fact: "", variants });
+  ({ id, name, tier, points: [0, 5, 10, 20, 30, 60, 100, 200][tier], fact: "", variants });
 
 // Answers are sorted most famous first, as the site's data files are.
 const ARSENAL = preparePrompt([

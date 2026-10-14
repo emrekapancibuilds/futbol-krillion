@@ -15,14 +15,16 @@ TM_BASE_URL = "https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data"
 TM_TABLES = ["players", "clubs", "competitions", "appearances", "games", "national_teams", "game_events"]
 TM_SNAPSHOT = "2026-07-06"
 
+# Points per tier: 5, 10, 20, 30, 60, 100, 200 (user call 2026-10-14; it was 10 ... 1000). web/lib/tiers.ts has the
+# same table, and webdata.py takes points from here, so the exported files can't carry a stale value.
 TIERS = [
-    ("World Cup Bandwagon", 10),
-    ("Glory Hunter", 40),
-    ("Part-Time Fan", 80),
-    ("Season Ticket Holder", 160),
-    ("True Analyst", 320),
-    ("Insane Ball Knowledge", 640),
-    ("Jobless", 1000),
+    ("World Cup Bandwagon", 5),
+    ("Glory Hunter", 10),
+    ("Part-Time Fan", 20),
+    ("Season Ticket Holder", 30),
+    ("True Analyst", 60),
+    ("Insane Ball Knowledge", 100),
+    ("Jobless", 200),
 ]
 # Players: the last fame rank in each of tiers 1-6; everyone after rank 32,000 is Jobless. Fixed ranks, not
 # percentages: what a fan knows doesn't grow when the database adds more obscure players.
