@@ -361,3 +361,18 @@ test('the first page is short: the day by its date, one line about the game, the
  await expect(page.locator('.topbar .led')).not.toContainText('#');
  await expect(page.locator('main')).not.toContainText(/#\d/);
 });
+
+test('the first page has a big white FUTKRILL wordmark with a gold outline, and it fits a phone',async({page})=>{
+ for(const width of [375,1100]){
+  await page.setViewportSize({width,height:800});
+  await page.goto('/');
+  const mark=page.getByTestId('wordmark');
+  await expect(mark).toHaveText('FUTKRILL');
+  await expect(mark).toHaveCSS('color','rgb(255, 255, 255)');
+  expect(await mark.evaluate(e=>getComputedStyle(e).textShadow)).toContain('rgb(255, 206, 72)');   // the gold outline
+  expect((await mark.boundingBox())!.height).toBeGreaterThanOrEqual(36);                            // large
+  const panel=page.locator('section.panel').first();
+  expect(await panel.evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);                          // nothing spills out of the card
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
+});

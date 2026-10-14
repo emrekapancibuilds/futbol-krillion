@@ -203,6 +203,23 @@ img.pixel { image-rendering: pixelated; }
 .bar { height: 8px; background: #20263f; box-shadow: 0 0 0 2px #04050b; }
 .bar > div { height: 100%; background: var(--cyan); }
 
+/* The first page's big wordmark (user, 2026-10-14): white pixel letters, gold outline, like Krillion's title. The outline
+   is stacked hard shadows so it stays blocky; --o scales with the text so it holds on a phone. */
+.wordmark {
+  --o: 0.055em;
+  font-family: var(--font-display), monospace;
+  font-size: clamp(40px, 13vw, 72px);
+  line-height: 1;
+  text-align: center;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow:
+    var(--o) 0 0 var(--gold), calc(var(--o) * -1) 0 0 var(--gold), 0 var(--o) 0 var(--gold), 0 calc(var(--o) * -1) 0 var(--gold),
+    var(--o) var(--o) 0 var(--gold), calc(var(--o) * -1) var(--o) 0 var(--gold),
+    var(--o) calc(var(--o) * -1) 0 var(--gold), calc(var(--o) * -1) calc(var(--o) * -1) 0 var(--gold),
+    0 calc(var(--o) * 2.4) 0 #6b4400;
+  padding: 6px 0 2px;
+}
 .tierlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .tierlist li { display: flex; align-items: center; gap: 10px; }
 .tierlist img { width: 36px; height: 36px; }
