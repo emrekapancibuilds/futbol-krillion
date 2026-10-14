@@ -333,3 +333,21 @@ test('the end screen shows a column per round, taller for rarer answers, and tap
  await expect(page.getByTestId('answers-question')).toHaveText('Name a player who played for Man City');
  await expect(page.getByRole('dialog')).toContainText('Phil Foden');
 });
+
+test('the PITCH INVASION sign on a Jobless result has room around it, on a phone too',async({page})=>{
+ test.setTimeout(60000);
+ await page.setViewportSize({width:375,height:812});
+ await page.route('**/api/round/start',r=>r.fulfill({json:{text:'Name a player',token:'t',previewMs:0,deadline:Date.now()+90000,now:Date.now()}}));
+ await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Andrea Mancini',tier:7,points:1000,fact:'Manchester City, 2010-2012',proof:'p'}}));
+ await page.goto('/');await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
+ await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();
+ const next=page.getByRole('button',{name:'NEXT QUESTION'});
+ await expect(next).toBeVisible({timeout:30000});
+ const sign=page.getByText('PITCH INVASION!');
+ await expect(sign).toBeVisible();
+ await page.waitForTimeout(1800);                                                       // let its little bounce finish
+ const box=async(l:ReturnType<typeof page.locator>)=>(await l.boundingBox())!;
+ const [fact,s,n]=[await box(page.getByText('Manchester City, 2010-2012')),await box(sign),await box(next)];
+ expect(s.y-(fact.y+fact.height)).toBeGreaterThanOrEqual(16);                           // air above the sign (it has a 4px frame)
+ expect(n.y-(s.y+s.height)).toBeGreaterThanOrEqual(20);                                 // and below it, before the buttons
+});

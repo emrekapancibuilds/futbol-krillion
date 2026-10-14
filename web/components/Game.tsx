@@ -491,7 +491,7 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
               <div>{info.quip}</div>
               <div className="muted">Accepted as <strong style={{ color: "var(--ink)" }}>{result.name}</strong></div>
               {result.fact && <div className="muted">{result.fact}</div>}
-              {result.tier === 7 && <motion.div className="led" style={{ justifySelf: "center" }} animate={{ y: [0, -6, 0] }} transition={{ repeat: 3, duration: 0.4 }}>PITCH INVASION!</motion.div>}
+              {result.tier === 7 && <motion.div className="led pitch-invasion" animate={{ y: [0, -6, 0] }} transition={{ repeat: 3, duration: 0.4 }}>PITCH INVASION!</motion.div>}
             </div>
           ) : (
             <div style={{ textAlign: "center", display: "grid", gap: 8 }}>

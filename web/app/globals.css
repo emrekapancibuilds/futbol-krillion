@@ -108,6 +108,7 @@ img.pixel { image-rendering: pixelated; }
   gap: 10px;
 }
 
+.pitch-invasion { justify-self: center; margin: 14px 0 12px; }   /* the sign has a 4px frame and hops 6px: give it air */
 .led {
   font-family: var(--font-display), monospace;
   background: #05060c;
