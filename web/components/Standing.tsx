@@ -11,7 +11,7 @@ import { mockStandings } from "@/lib/standings.ts";
 const VW = 280;          // viewBox width
 const CH = 78;           // chart height, above the axis line
 const fmt = (n: number) => n.toLocaleString("en-US");
-const BAR_STAGGER = 0.014;   // seconds between neighbouring bars rising, left to right
+const BAR_STAGGER = 0.007;   // seconds between neighbouring bars rising, left to right (the whole sweep takes about 0.8 s)
 const BAR_RISE = 0.4;
 
 export default function Standing({ seed, score, field }: { seed: string; score: number; field: (players: string) => string }) {
@@ -46,12 +46,13 @@ export default function Standing({ seed, score, field }: { seed: string; score: 
         {s.curve.map((v, i) => {
           const h = Math.max(1, Math.round(v * (CH - 6)));
           const x = Math.floor(i * barW);
+          const w = Math.floor((i + 1) * barW) - x;     // whole units, so neighbours neither overlap nor leave gaps
           const beaten = (i + 1) * barW <= youX;
           return (
             <motion.g key={i} style={{ originY: 1, transformBox: "fill-box" }} initial={still ? false : { scaleY: 0 }}
                       animate={{ scaleY: 1 }} transition={{ delay: i * BAR_STAGGER, duration: BAR_RISE, ease: "easeOut" }}>
-              <rect x={x} y={CH - h} width={Math.ceil(barW)} height={h} className={beaten ? "bar-beaten" : "bar-rest"} />
-              <rect x={x} y={CH - h} width={Math.ceil(barW)} height={2} className="bar-top" />
+              <rect x={x} y={CH - h} width={w} height={h} className={beaten ? "bar-beaten" : "bar-rest"} />
+              <rect x={x} y={CH - h} width={w} height={2} className="bar-top" />
             </motion.g>
           );
         })}
