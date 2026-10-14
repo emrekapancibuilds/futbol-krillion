@@ -6,11 +6,13 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { crowdReaction, type Reaction } from "@/lib/crowd-mood.ts";
+import { withYou, type TierList } from "@/lib/game/columns.ts";
 import { countdown } from "@/lib/game/countdown.ts";
 import { currentStreak, roundScore, scoreRound, SET_ROUNDS } from "@/lib/game/streak.ts";
 import { shareText, streakAfter } from "@/lib/share.ts";
 import { MAX_SCORE, TIER_COLORS, TIERS, tierInfo } from "@/lib/tiers.ts";
 
+import RoundColumns from "./RoundColumns.tsx";
 import Standing from "./Standing.tsx";
 import { StreakBadge, StreakLost } from "./Streak.tsx";
 import { billingSession } from "./SubscriptionPanel";
@@ -19,6 +21,7 @@ import TunnelReveal from "./TunnelReveal.tsx";
 type DayInfo = { number: number; date: string; rounds: number; nextAt: string; snapshot: string; gameId?: string; mode?: string };
 export type Result = { status: "accepted" | "missed" | "passed"; points: number; tier: number | null; name?: string; fact?: string;
                        key: string; prompt?: string;    // prompt: set for Unlimited rounds
+                       text?: string;                   // the question, so the answer pop-up can show it at once
                        streak?: number; bonus?: number; lost?: number };   // the streak after this round, its bonus, and the streak it broke
 type Live = { round: number; text: string; token: string; previewEnd: number; deadline: number; prompt?: string; bindingVersion?: number };
 // Unlimited plays sets of 7 of one round type; it also keeps lifetime totals and the prompts already played.
@@ -40,7 +43,7 @@ const typeLabel = (key?: string) => ROUND_TYPES.find((t) => t.key === key)?.labe
 type AnswerResponse = { status: "accepted" | "confirm" | "rejected" | "expired" | "invalid"; name?: string; tier?: number; points?: number;
                         fact?: string; proof?: string; suggestion?: string; error?: string };
 type PassResponse = { status: "passed" | "invalid"; proof?: string; error?: string };
-type RevealResponse = { total: number; tiers: { tier: number; points: number; count: number; top: { name: string; fact: string }[] }[] };
+type RevealResponse = { text?: string; total: number; tiers: TierList[] };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -142,7 +145,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
 
   /** `quiet`: the player left mid-round, so no result screen and no crowd reaction; straight back to the start. */
   const finishRound = (r: Result, quiet = false) => {
-    const scored: Result = { ...r, ...scoreRound(saved.results, r.status) };         // streak, bonus and lost streak
+    const scored: Result = { ...r, text: live?.text, ...scoreRound(saved.results, r.status) };   // streak, bonus and lost streak
     const results = [...saved.results, unlimited ? { ...scored, prompt: live?.prompt } : scored];
     const s: Saved = unlimited
       ? { results, seen: saved.seen, category: saved.category, total: (saved.total ?? 0) + roundScore(scored),
@@ -304,7 +307,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
       )}
 
       {phase === "result" && last && day && (
-        <RoundResult result={last} roundsLeft={day.rounds - done} onNext={next}
+        <RoundResult result={last} roundsLeft={day.rounds - done} onNext={next} onAnswers={() => setModal(done - 1)}
                      onLanded={() => { setLanded(true); react("accepted", last.tier); }} />
       )}
 
@@ -379,23 +382,6 @@ function UnlimitedHome({ saved, onPick, onContinue, busy }: {
   );
 }
 
-function RoundTiles({ results, onOpen }: { results: Result[]; onOpen: (i: number) => void }) {
-  return (
-    <>
-      <div className="rounds">
-        {results.map((r, i) => (
-          <button key={i} onClick={() => onOpen(i)} aria-label={`Round ${i + 1} answers`}>
-            {r.tier ? <img className="pixel" src={tierInfo(r.tier).icon} alt="" /> : <div className="miss">-</div>}
-            {fmt(r.points)}
-            {!!r.bonus && <small className="tile-bonus">+{fmt(r.bonus)}</small>}
-          </button>
-        ))}
-      </div>
-      <div className="muted" style={{ fontSize: 14 }}>Tap a round to see the top answers.</div>
-    </>
-  );
-}
-
 function UnlimitedEnd({ saved, total, onOpen, onAgain, onChange, busy }: {
   saved: Saved; total: number; onOpen: (i: number) => void; onAgain: () => void; onChange: () => void; busy: boolean;
 }) {
@@ -415,7 +401,7 @@ function UnlimitedEnd({ saved, total, onOpen, onAgain, onChange, busy }: {
       <div><span className="big-score">{fmt(total)}</span><span className="muted"> / {fmt(MAX_SCORE)}</span></div>
       <Standing seed={`unlimited:${saved.category ?? "mixed"}:${saved.sets ?? 0}`} score={total}
                 field={(n) => `${n} ${label.toUpperCase()} PLAYERS`} />
-      <RoundTiles results={saved.results} onOpen={onOpen} />
+      <RoundColumns results={saved.results} onOpen={onOpen} />
       <button className="btn" onClick={onAgain} disabled={busy}>PLAY ANOTHER 7</button>
       <button className="btn secondary" onClick={onChange}>CHANGE ROUND TYPE</button>
       <button className="linkish" onClick={share}>{copied ? "Copied!" : "Share this set"}</button>
@@ -445,7 +431,7 @@ function Clock({ deadline, previewEnd, now }: { deadline: number; previewEnd: nu
 
 export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onAnswers }: {
   result: Result; roundsLeft: number; onNext: () => void; onLanded: () => void; onSmash?: (gate: number, last: boolean) => void;
-  onAnswers?: () => void;     // Unlimited has no results screen, so the answer list opens from here
+  onAnswers?: () => void;     // opens the answer list for this round, with the player's own answer marked
 }) {
   const accepted = result.status === "accepted" && !!result.tier;
   const [landedHere, setLandedHere] = useState(!accepted);   // the tier banner is up
@@ -511,11 +497,11 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
             <div style={{ textAlign: "center", display: "grid", gap: 8 }}>
               <div className="title" style={{ color: "var(--red)" }}>{result.status === "passed" ? "PASSED" : "FULL TIME ON THIS ONE"}</div>
               {!!result.lost && <StreakLost was={result.lost} />}
-              <div className="muted">No points this round.{onAnswers ? "" : " The top answers are on the results screen."}</div>
+              <div className="muted">No points this round.</div>
             </div>
           )}
-          {onAnswers && <button className="linkish" onClick={onAnswers}>See the top answers</button>}
-          <button className="btn" onClick={onNext}>{roundsLeft > 0 ? "NEXT ROUND" : "FINAL WHISTLE"}</button>
+          <button className="btn" onClick={onNext}>{roundsLeft > 0 ? "NEXT QUESTION" : "FINAL WHISTLE"}</button>
+          {onAnswers && <button className="btn secondary" onClick={onAnswers}>SEE ANSWERS</button>}
         </motion.section>
       )}
     </>
@@ -537,7 +523,7 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
       <div className="muted">FULL TIME · {day.mode === "archive" ? "ARCHIVE" : "DAILY"} #{day.number}</div>
       <div><span className="big-score">{fmt(total)}</span><span className="muted"> / {fmt(MAX_SCORE)}</span></div>
       {day.mode !== "archive" && <Standing seed={`daily:${day.number}`} score={total} field={(n) => `TODAY'S ${n} PLAYERS`} />}
-      <RoundTiles results={results} onOpen={onOpen} />
+      <RoundColumns results={results} onOpen={onOpen} />
       <button className="btn" onClick={share}>{copied ? "COPIED!" : "SHARE RESULT"}</button>
       <Link className="btn secondary" href="/unlimited">KEEP PLAYING</Link>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -551,30 +537,45 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
 function AnswerList({ slot, label, result, onClose }: { slot: object; label: string; result: Result; onClose: () => void }) {
   const [data, setData] = useState<RevealResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const youRef = useRef<HTMLLIElement>(null);
   const slotKey = JSON.stringify(slot);
   useEffect(() => {
     post<RevealResponse & { error?: string }>("/api/round/reveal", { ...JSON.parse(slotKey), token: result.key })
       .then(({ ok, data }) => (ok ? setData(data) : setErr(data.error ?? "Could not load the answers.")));
   }, [slotKey, result.key]);
+  useEffect(() => { if (data) youRef.current?.scrollIntoView({ block: "nearest" }); }, [data]);
+  const question = data?.text ?? result.text;
+  const tiers = data ? withYou(data.tiers, result) : [];
+  const mine = result.status === "accepted" && result.name && result.tier ? tierInfo(result.tier) : null;
   return (
     <motion.div className="modal-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <div className="panel modal answers" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${label} answers`}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-          <strong>{label}{data ? ` · ${fmt(data.total)} valid answers` : ""}</strong>
-          <button className="linkish" onClick={onClose}>close</button>
+        <div className="answers-head">
+          <div className="answers-top">
+            <h2 className="answers-question" data-testid="answers-question">{question ?? label}</h2>
+            <button className="modal-close" onClick={onClose} aria-label="Close">&times;</button>
+          </div>
+          <div className="muted">{label}{data ? ` · ${fmt(data.total)} valid answers` : ""}</div>
+          <div className={`your-answer ${mine ? "" : "none"}`} data-testid="your-answer">
+            {mine
+              ? <>YOU SAID <strong>{result.name}</strong> · {mine.name} · +{fmt(result.points)}</>
+              : result.status === "passed" ? "YOU PASSED ON THIS ONE" : "YOU RAN OUT OF TIME"}
+          </div>
         </div>
         {err && <p>{err}</p>}
         {!data && !err && <p className="muted">Loading...</p>}
-        {data?.tiers.filter((t) => t.count > 0).map((t) => (
-          <div key={t.tier}>
-            <h4><img className="pixel" src={tierInfo(t.tier).icon} alt="" />{tierInfo(t.tier).name} · {fmt(t.points)} · {fmt(t.count)}</h4>
-            <ul>
-              {t.top.map((a) => (
-                <li key={a.name} className={a.name === result.name ? "you" : ""}>{a.name} <small>{a.fact}</small></li>
-              ))}
-              {t.count > t.top.length && <li className="muted">+{fmt(t.count - t.top.length)} more</li>}
-            </ul>
-          </div>
+        {tiers.filter((t) => t.count > 0).map((t) => (
+            <div key={t.tier}>
+              <h4><img className="pixel" src={tierInfo(t.tier).icon} alt="" />{tierInfo(t.tier).name} · {fmt(t.points)} · {fmt(t.count)}</h4>
+              <ul>
+                {t.top.map((a) => (
+                  <li key={a.name} ref={a.you ? youRef : undefined} className={a.you ? "you" : ""} data-testid={a.you ? "answer-you" : undefined}>
+                    {a.you && <span className="you-tag">YOU</span>}{a.name} <small>{a.fact}</small>
+                  </li>
+                ))}
+                {t.count > t.top.length && <li className="muted">+{fmt(t.count - t.top.length)} more</li>}
+              </ul>
+            </div>
         ))}
       </div>
     </motion.div>

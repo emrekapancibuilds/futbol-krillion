@@ -62,6 +62,7 @@ test("the answer list stays hidden until the round is over", () => {
   const proof = done.status === "accepted" ? done.proof : "";
   const early = revealRound(DATA, { day: 1, round: 0 }, proof, 10_000, SECRET)!;                       // answered: allowed
   assert.equal(early.total, 30);
+  assert.equal(early.text, "Name a player who played for Arsenal");        // the answer pop-up shows the question at the top
   assert.equal(early.tiers.length, 7);
   assert.equal(early.tiers[0].tier, 1);
   assert.ok(early.tiers.every((t) => t.top.length <= 10));

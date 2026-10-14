@@ -265,28 +265,71 @@ test('streak: back-to-back correct answers earn a growing bonus, a pass loses it
  await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Fixture Player',tier:1,points:10,fact:'fixture',proof:'proof'}}));
  await page.route('**/api/round/pass',r=>r.fulfill({json:{status:'passed',proof:'proof'}}));
  const led=page.locator('.topbar .led');
- const answer=async()=>{await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();await expect(page.getByRole('button',{name:/NEXT ROUND|FINAL WHISTLE/})).toBeVisible({timeout:30000});};
+ const answer=async()=>{await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();await expect(page.getByRole('button',{name:/NEXT QUESTION|FINAL WHISTLE/})).toBeVisible({timeout:30000});};
  await page.goto('/');await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
  await expect(page.getByTestId('streak-flame')).toHaveCount(0);                               // no streak yet
  await answer();                                                                               // round 1: correct
  await expect(page.getByTestId('streak-flame')).toBeVisible();                                // the flame is lit...
  await expect(page.getByTestId('streak-bonus')).toHaveCount(0);                               // ...but the first answer earns no bonus
  await expect(led).toHaveText(/· 10$/);
- await page.getByRole('button',{name:'NEXT ROUND'}).click();
+ await page.getByRole('button',{name:'NEXT QUESTION'}).click();
  await expect(page.getByTestId('streak-flame')).toContainText('x1');                          // lit during the next round too
  await answer();                                                                               // round 2: correct in a row -> +10
  await expect(page.getByTestId('streak-bonus')).toContainText('+10');
  await expect(led).toHaveText(/· 30$/);                                                        // 10 + 10 + 10 bonus
- await page.getByRole('button',{name:'NEXT ROUND'}).click();
+ await page.getByRole('button',{name:'NEXT QUESTION'}).click();
  await expect(page.getByTestId('streak-flame')).toContainText('x2');
  await page.getByRole('button',{name:'PASS',exact:true}).click();await page.getByRole('button',{name:'YES, PASS',exact:true}).click();
  await expect(page.getByTestId('streak-lost')).toBeVisible();                                  // the streak burns out
  await expect(page.getByTestId('streak-lost')).toContainText(/STREAK LOST/i);
  await expect(led).toHaveText(/· 30$/);
- await page.getByRole('button',{name:'NEXT ROUND'}).click();
+ await page.getByRole('button',{name:'NEXT QUESTION'}).click();
  await expect(page.getByTestId('streak-flame')).toHaveCount(0);                               // gone for round 4
  await answer();                                                                               // round 4: correct again, streak restarts at 1
  await expect(page.getByTestId('streak-flame')).toBeVisible();
  await expect(page.getByTestId('streak-bonus')).toHaveCount(0);
  await expect(led).toHaveText(/· 40$/);
+});
+
+const REVEAL={text:'Name a player who played for Man City',total:55,tiers:[
+ {tier:1,points:10,count:30,top:[{name:'Gareth Barry',fact:'Man City'},{name:'Joe Hart',fact:'Man City'}]},
+ {tier:3,points:80,count:25,top:[{name:'Phil Foden',fact:'Man City'}]}]};
+
+test('after a round, SEE ANSWERS shows the question and marks the answer you gave, even when it is outside the top list',async({page})=>{
+ await page.route('**/api/round/start',r=>r.fulfill({json:{text:'Name a player who played for Man City',token:'t',previewMs:0,deadline:Date.now()+90000,now:Date.now()}}));
+ await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Fixture Player',tier:1,points:10,fact:'fixture fact',proof:'proof'}}));
+ await page.route('**/api/round/reveal',r=>r.fulfill({json:REVEAL}));
+ await page.goto('/');await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
+ await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();
+ await expect(page.getByRole('button',{name:'NEXT QUESTION'})).toBeVisible({timeout:30000});
+ await page.getByRole('button',{name:'SEE ANSWERS'}).click();
+ const dialog=page.getByRole('dialog');
+ await expect(dialog.getByTestId('answers-question')).toHaveText('Name a player who played for Man City');   // the question is at the very top
+ await expect(dialog.getByTestId('your-answer')).toContainText('Fixture Player');
+ await expect(dialog.getByTestId('answer-you')).toContainText('Fixture Player');                             // marked in its tier
+ await expect(dialog.getByTestId('answer-you')).toContainText('YOU');
+ await expect(dialog.getByText('Gareth Barry')).toBeVisible();
+ await dialog.getByRole('button',{name:'Close'}).click();
+ await expect(dialog).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'NEXT QUESTION'})).toBeVisible();                                // still on the result card
+});
+
+test('the end screen shows a column per round, taller for rarer answers, and tapping one lists all its answers',async({page})=>{
+ await page.route('**/api/round/reveal',r=>r.fulfill({json:REVEAL}));
+ const mk=(tier:number|null,points:number)=>({status:tier?'accepted':'missed',points,tier,name:tier?'Someone':undefined,fact:'f',key:'k',text:'Name a player who played for Man City'});
+ const day=await (await page.request.get('/api/daily')).json();
+ await page.addInitScript(([n,results])=>localStorage.setItem(`fk:day:${n}`,JSON.stringify({results})),[day.number,[mk(7,1000),mk(1,10),mk(null,0),mk(3,80),mk(1,10),mk(1,10),mk(3,80)]] as const);
+ await page.goto('/');
+ await expect(page.locator('.col')).toHaveCount(7);
+ const levels=await page.locator('.col').evaluateAll(els=>els.map(e=>Number(e.getAttribute('data-level'))));
+ expect(levels).toEqual([7,1,0,3,1,1,3]);
+ const heightsNow=()=>page.locator('.colbar').evaluateAll(els=>els.map(e=>e.getBoundingClientRect().height));
+ await expect.poll(async()=>(await heightsNow())[6],{timeout:5000}).toBeGreaterThan(80);                      // the last column has grown in
+ const heights=await heightsNow();
+ expect(heights[0]).toBeGreaterThan(heights[3]);                                                               // Jobless stands over Part-Time Fan
+ expect(heights[3]).toBeGreaterThan(heights[1]);
+ expect(heights[1]).toBeGreaterThan(heights[2]);                                                               // ...which beats a miss
+ await page.getByTestId('column-4').click();
+ await expect(page.getByTestId('answers-question')).toHaveText('Name a player who played for Man City');
+ await expect(page.getByRole('dialog')).toContainText('Phil Foden');
 });
