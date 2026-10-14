@@ -34,7 +34,7 @@ export type AnswerResult =
   | { status: "rejected" }
   | { status: "expired"; proof: string }
   | { status: "invalid" };
-export type Reveal = { total: number; tiers: { tier: number; points: number; count: number; top: { name: string; fact: string }[] }[] };
+export type Reveal = { text: string; total: number; tiers: { tier: number; points: number; count: number; top: { name: string; fact: string }[] }[] };
 
 export function dayFor(data: GameData, now: Date): Day | null {
   const date = now.toISOString().slice(0, 10);
@@ -118,5 +118,5 @@ export function revealRound(data: GameData, slot: Slot, token: string, now: numb
     return { tier, points: list[0]?.points ?? 0, count: list.length,
              top: list.slice(0, TOP_ANSWERS).map((a) => ({ name: a.name, fact: a.fact })) };
   });
-  return { total: prompt.answers.length, tiers };
+  return { text: prompt.text, total: prompt.answers.length, tiers };
 }
