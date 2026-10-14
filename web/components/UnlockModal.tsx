@@ -31,7 +31,7 @@ export default function UnlockModal({ onClose }: { onClose: () => void }) {
   if (!mounted) return null;
   return createPortal(
     <motion.div className="modal-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="panel modal stack unlock-modal" role="dialog" aria-modal="true" aria-label="Unlock Unlimited" style={{ gap: 16 }}
+      <motion.div className="panel modal unlock-modal" role="dialog" aria-modal="true" aria-label="Unlock Unlimited"
                   initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ type: "spring", stiffness: 260, damping: 24 }} onClick={(e) => e.stopPropagation()}>
         <div className="billing-heading">
