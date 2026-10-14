@@ -38,7 +38,9 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(7, 10, 24, 0.15) 0%, rgba(7, 10, 24, 0.55) 55%, rgba(7, 10, 24, 0.85) 100%);
+  background:
+    linear-gradient(rgba(3, 5, 16, 0.22), rgba(3, 5, 16, 0.22)),
+    linear-gradient(180deg, rgba(7, 10, 24, 0.15) 0%, rgba(7, 10, 24, 0.55) 55%, rgba(7, 10, 24, 0.85) 100%);
 }
 @media (min-width: 760px) {
   .stage { background-image: url("/art/stadium-wide.png"); }
