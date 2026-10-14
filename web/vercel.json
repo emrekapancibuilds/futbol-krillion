@@ -5,13 +5,25 @@
     {
       "source": "/",
       "has": [{ "type": "host", "value": "futbolkrillion.vercel.app" }],
-      "destination": "https://futkrill.vercel.app/",
+      "destination": "https://futkrill.com/",
       "permanent": true
     },
     {
       "source": "/:path+",
       "has": [{ "type": "host", "value": "futbolkrillion.vercel.app" }],
-      "destination": "https://futkrill.vercel.app/:path+",
+      "destination": "https://futkrill.com/:path+",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "futkrill.vercel.app" }],
+      "destination": "https://futkrill.com/",
+      "permanent": true
+    },
+    {
+      "source": "/:path((?!api/stripe/webhook$).+)",
+      "has": [{ "type": "host", "value": "futkrill.vercel.app" }],
+      "destination": "https://futkrill.com/:path",
       "permanent": true
     }
   ]
