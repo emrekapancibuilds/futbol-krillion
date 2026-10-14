@@ -37,7 +37,7 @@ export function StreakBadge({ streak }: { streak: number }) {
                        animate={still ? { scale: grow } : { scaleY: [grow, grow * 1.1, grow * 0.95, grow * 1.07, grow],
                                                             scaleX: [grow, grow * 0.95, grow * 1.03, grow * 0.97, grow] }}
                        transition={still ? { duration: 0 } : { repeat: Infinity, duration: 0.8, ease: "easeInOut" }}>
-            <Flame size={26} />
+            <Flame size={32} />
           </motion.span>
           <span className="streak-count">x{streak}</span>
           <span className="streak-next">NEXT +{bonusForStreak(streak + 1)}</span>
