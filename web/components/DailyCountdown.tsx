@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { countdown } from "@/lib/game/countdown.ts";
+import { dayLabel } from "@/lib/game/dayLabel.ts";
 import { progressKey, type DayInfo } from "@/lib/game/types.ts";
 
 function playedAll(day: DayInfo): boolean {
@@ -37,7 +38,7 @@ export default function DailyCountdown() {
   return (
     <motion.section className="panel stack daily-countdown" aria-label="Today's daily" style={{ gap: 12 }}
                     initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="muted">TODAY&apos;S DAILY · #{day.number}</div>
+      <div className="muted">TODAY&apos;S DAILY · {dayLabel(day.date).toUpperCase()}</div>
       {done && <p>You&apos;ve played today&apos;s daily.</p>}
       <p className="countdown-line">Next daily in <strong className="countdown">{countdown(new Date(day.nextAt).getTime() - now)}</strong></p>
       {!done && <Link className="btn" href="/">PLAY TODAY&apos;S DAILY</Link>}

@@ -7,7 +7,7 @@ async function closePitch(page:Page){await expect(pitch(page)).toBeVisible();awa
 
 test('daily stays free; one-time pricing matches the existing pixel design on desktop and mobile',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/');await expect(page.getByRole('heading',{name:/Daily #/})).toBeVisible();
+ await page.goto('/');await expect(page.getByRole('heading',{name:/^Daily - [A-Z][a-z]+ \d{1,2}$/})).toBeVisible();
  await expect(page.getByText(/30 seconds each/)).toBeVisible();
  await expect(page.locator('section.panel').first()).toHaveCSS('opacity','1');
  await page.screenshot({path:'tests/browser/daily-desktop.png',fullPage:true});
@@ -136,7 +136,7 @@ test('archive progress and streaks remain separate from free daily',async({page}
  await page.route('**/api/round/pass',r=>r.fulfill({json:{status:'passed',proof:'fixture-proof'}}));
  await page.goto('/unlimited');await page.evaluate(()=>localStorage.setItem('fk:streak',JSON.stringify({last:2,streak:2})));
  await page.getByRole('button',{name:'DAILY ARCHIVE'}).click();await page.getByRole('button',{name:'#1 · 2026-10-11'}).click();
- await expect(page.getByRole('heading',{name:'Archive #1'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Archive - October 11'})).toBeVisible();
  await page.getByRole('button',{name:'KICK OFF',exact:true}).click();await page.getByRole('button',{name:'PASS',exact:true}).click();
  await page.getByRole('button',{name:'YES, PASS',exact:true}).click();await expect(page.getByText('PASSED',{exact:true})).toBeVisible();
  await page.reload();await expect(page.getByRole('button',{name:'CONTINUE · ROUND 2'})).toBeVisible();
@@ -350,4 +350,14 @@ test('the PITCH INVASION sign on a Jobless result has room around it, on a phone
  const [fact,s,n]=[await box(page.getByText('Manchester City, 2010-2012')),await box(sign),await box(next)];
  expect(s.y-(fact.y+fact.height)).toBeGreaterThanOrEqual(16);                           // air above the sign (it has a 4px frame)
  expect(n.y-(s.y+s.height)).toBeGreaterThanOrEqual(20);                                 // and below it, before the buttons
+});
+
+test('the first page is short: the day by its date, one line about the game, the start button, no tier list and no day number',async({page})=>{
+ await page.goto('/');
+ const home=page.locator('section.panel').first();
+ await expect(home.getByRole('heading')).toHaveText(/^Daily - [A-Z][a-z]+ \d{1,2}$/);
+ await expect(home.getByRole('button',{name:'KICK OFF',exact:true})).toBeVisible();
+ for(const tier of ['World Cup Bandwagon','Glory Hunter','Part-Time Fan','Season Ticket Holder','True Analyst','Insane Ball Knowledge','Jobless']) await expect(home.getByText(tier)).toHaveCount(0);
+ await expect(page.locator('.topbar .led')).not.toContainText('#');
+ await expect(page.locator('main')).not.toContainText(/#\d/);
 });
