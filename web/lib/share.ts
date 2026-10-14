@@ -1,14 +1,14 @@
-import { tierInfo } from "./tiers.ts";
+import { MAX_SCORE, tierInfo } from "./tiers.ts";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 /** Plain-text result for the share sheet (spec §7). `game` is the daily's number or an Unlimited label;
- *  `tiers[i]` is null for a missed round. */
+ *  `points[i]` is each round's points plus its streak bonus; `tiers[i]` is null for a missed round. */
 export function shareText(game: number | string, points: number[], tiers: (number | null)[], url: string): string {
   const total = points.reduce((a, b) => a + b, 0);
   const best = tiers.filter((t): t is number => t !== null).sort((a, b) => b - a)[0];
   return [
-    `Futkrill ${typeof game === "number" ? `#${game}` : game} · ${fmt(total)} / 7,000`,
+    `Futkrill ${typeof game === "number" ? `#${game}` : game} · ${fmt(total)} / ${fmt(MAX_SCORE)}`,
     points.join(" · "),
     `Best pick: ${best ? tierInfo(best).name : "none"}`,
     url,

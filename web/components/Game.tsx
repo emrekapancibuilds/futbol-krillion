@@ -7,23 +7,25 @@ import { createPortal } from "react-dom";
 
 import { crowdReaction, type Reaction } from "@/lib/crowd-mood.ts";
 import { countdown } from "@/lib/game/countdown.ts";
+import { currentStreak, roundScore, scoreRound, SET_ROUNDS } from "@/lib/game/streak.ts";
 import { shareText, streakAfter } from "@/lib/share.ts";
 import { MAX_SCORE, TIER_COLORS, TIERS, tierInfo } from "@/lib/tiers.ts";
 
 import Standing from "./Standing.tsx";
+import { StreakBadge, StreakLost } from "./Streak.tsx";
 import { billingSession } from "./SubscriptionPanel";
 import TunnelReveal from "./TunnelReveal.tsx";
 
 type DayInfo = { number: number; date: string; rounds: number; nextAt: string; snapshot: string; gameId?: string; mode?: string };
 export type Result = { status: "accepted" | "missed" | "passed"; points: number; tier: number | null; name?: string; fact?: string;
-                       key: string; prompt?: string };   // prompt: set for Unlimited rounds
+                       key: string; prompt?: string;    // prompt: set for Unlimited rounds
+                       streak?: number; bonus?: number; lost?: number };   // the streak after this round, its bonus, and the streak it broke
 type Live = { round: number; text: string; token: string; previewEnd: number; deadline: number; prompt?: string; bindingVersion?: number };
 // Unlimited plays sets of 7 of one round type; it also keeps lifetime totals and the prompts already played.
 type Saved = { results: Result[]; live?: Live; category?: string; total?: number; played?: number; sets?: number; seen?: string[] };
 type StartResponse = { text: string; previewMs: number; deadline: number; token: string; now: number; prompt?: string; error?: string };
 export type Mode = "daily" | "unlimited" | "archive";
 const UNLIMITED_KEY = "fk:unlimited";
-const SET_ROUNDS = 7;
 export const ROUND_TYPES = [
   { key: "mixed", label: "Mixed" },
   { key: "premier-league", label: "Premier League" },
@@ -134,15 +136,16 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
   };
   const live = saved.live;
   const done = saved.results.length;
-  const total = saved.results.reduce((a, r) => a + r.points, 0);
+  const total = saved.results.reduce((a, r) => a + roundScore(r), 0);
   const slot = (l: Live) => (unlimited ? { prompt: l.prompt } : { day: day!.number, round: l.round, ...(archive ? { gameId: day!.gameId } : {}) });
   const inPreview = !!live && now < live.previewEnd;
 
   /** `quiet`: the player left mid-round, so no result screen and no crowd reaction; straight back to the start. */
   const finishRound = (r: Result, quiet = false) => {
-    const results = [...saved.results, unlimited ? { ...r, prompt: live?.prompt } : r];
+    const scored: Result = { ...r, ...scoreRound(saved.results, r.status) };         // streak, bonus and lost streak
+    const results = [...saved.results, unlimited ? { ...scored, prompt: live?.prompt } : scored];
     const s: Saved = unlimited
-      ? { results, seen: saved.seen, category: saved.category, total: (saved.total ?? 0) + r.points,
+      ? { results, seen: saved.seen, category: saved.category, total: (saved.total ?? 0) + roundScore(scored),
           played: (saved.played ?? 0) + 1, sets: (saved.sets ?? 0) + (results.length >= SET_ROUNDS ? 1 : 0) }
       : { results };
     persist(s);
@@ -237,7 +240,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
           {/* Not mid-round: EXIT is the way out then, and the header has no room for both on a 375px phone. */}
           {phase !== "round" && phase !== "result" && <Link className="linkish" href="/unlimited">Unlimited</Link>}
           {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}
-          {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}#${day.number}`} · {fmt(landed ? total : total - (last?.points ?? 0))}</div>}
+          {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}#${day.number}`} · {fmt(landed ? total : total - (last ? roundScore(last) : 0))}</div>}
         </div>
       </header>
 
@@ -252,7 +255,8 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
         <section className="panel stack" style={{ gap: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Pips n={day.rounds} done={done} />
-            <span className="muted">{unlimited ? `${typeLabel(saved.category).toUpperCase()} · ` : ""}ROUND {live.round + 1} / {day.rounds}</span>
+            <StreakBadge streak={currentStreak(saved.results)} />
+            <span className="muted" style={{ whiteSpace: "nowrap" }}>{unlimited ? `${typeLabel(saved.category).toUpperCase()} · ` : ""}ROUND {live.round + 1} / {day.rounds}</span>
           </div>
           <h1 className="title">{live.text}</h1>
           {leaving && (
@@ -295,7 +299,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
               </div>
             </>
           )}
-          <p className="muted" style={{ margin: 0, fontSize: 14 }}>Rarer correct answers score more. Wrong guesses cost only time.</p>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>Rarer correct answers score more. Back-to-back correct answers build a streak bonus. Wrong guesses cost only time.</p>
         </section>
       )}
 
@@ -330,7 +334,7 @@ function Home({ day, done, onStart, busy }: { day: DayInfo; done: number; onStar
         <img className="pixel" src="/art/mascot.png" alt="" style={{ width: 84 }} />
         <div>
           <h1 className="title">{day.mode === "archive" ? "Archive" : "Daily"} #{day.number}</h1>
-          <p className="muted" style={{ margin: "6px 0 0" }}>7 football prompts. 30 seconds each. The more obscure your correct answer, the more you score.</p>
+          <p className="muted" style={{ margin: "6px 0 0" }}>7 football prompts. 30 seconds each. The more obscure your correct answer, the more you score, and back-to-back correct answers build a streak bonus.</p>
         </div>
       </div>
       <ul className="tierlist">
@@ -383,6 +387,7 @@ function RoundTiles({ results, onOpen }: { results: Result[]; onOpen: (i: number
           <button key={i} onClick={() => onOpen(i)} aria-label={`Round ${i + 1} answers`}>
             {r.tier ? <img className="pixel" src={tierInfo(r.tier).icon} alt="" /> : <div className="miss">-</div>}
             {fmt(r.points)}
+            {!!r.bonus && <small className="tile-bonus">+{fmt(r.bonus)}</small>}
           </button>
         ))}
       </div>
@@ -397,7 +402,7 @@ function UnlimitedEnd({ saved, total, onOpen, onAgain, onChange, busy }: {
   const [copied, setCopied] = useState(false);
   const label = typeLabel(saved.category);
   const share = async () => {
-    const text = shareText(`Unlimited · ${label}`, saved.results.map((r) => r.points), saved.results.map((r) => r.tier),
+    const text = shareText(`Unlimited · ${label}`, saved.results.map(roundScore), saved.results.map((r) => r.tier),
                            window.location.origin + "/unlimited");
     try {
       if (navigator.share) await navigator.share({ text });
@@ -474,6 +479,7 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
                   <img className="pixel" src={info.icon} alt="" />
                   <div className="tier-name">{info.name.toUpperCase()}</div>
                   <div className="tier-pts">+{fmt(result.points)} PTS</div>
+                  {!!result.bonus && <div className="tier-bonus">+{fmt(result.bonus)} STREAK BONUS</div>}
                 </motion.div>
               </div>
               <div className="reveal-hint">TAP TO CONTINUE</div>
@@ -494,6 +500,8 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
               <img className="pixel" src={info.icon} alt="" style={{ width: 96, margin: "0 auto" }} />
               <div className="tier-name" style={{ color: colors.light }}>{info.name.toUpperCase()}</div>
               <div className="title" style={{ color: "var(--gold)" }}>+{fmt(result.points)} PTS</div>
+              {!!result.bonus && <div className="streak-bonus" data-testid="streak-bonus">STREAK BONUS +{fmt(result.bonus)}</div>}
+              <StreakBadge streak={result.streak ?? 0} />
               <div>{info.quip}</div>
               <div className="muted">Accepted as <strong style={{ color: "var(--ink)" }}>{result.name}</strong></div>
               {result.fact && <div className="muted">{result.fact}</div>}
@@ -502,6 +510,7 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
           ) : (
             <div style={{ textAlign: "center", display: "grid", gap: 8 }}>
               <div className="title" style={{ color: "var(--red)" }}>{result.status === "passed" ? "PASSED" : "FULL TIME ON THIS ONE"}</div>
+              {!!result.lost && <StreakLost was={result.lost} />}
               <div className="muted">No points this round.{onAnswers ? "" : " The top answers are on the results screen."}</div>
             </div>
           )}
@@ -517,7 +526,7 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
   const [copied, setCopied] = useState(false);
   const streak = store.get<{ last: number; streak: number }>("fk:streak");
   const share = async () => {
-    const text = shareText(day.mode === "archive" ? `Archive ${day.number}` : day.number, results.map((r) => r.points), results.map((r) => r.tier), window.location.origin);
+    const text = shareText(day.mode === "archive" ? `Archive ${day.number}` : day.number, results.map(roundScore), results.map((r) => r.tier), window.location.origin);
     try {
       if (navigator.share) await navigator.share({ text });
       else { await navigator.clipboard.writeText(text); setCopied(true); }
@@ -532,7 +541,7 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
       <button className="btn" onClick={share}>{copied ? "COPIED!" : "SHARE RESULT"}</button>
       <Link className="btn secondary" href="/unlimited">KEEP PLAYING</Link>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        {day.mode !== "archive" && <span>Streak: {streak?.streak ?? 1}</span>}
+        {day.mode !== "archive" && <span>Daily streak: {streak?.streak ?? 1}</span>}
         <span className="muted">Next daily in {countdown(new Date(day.nextAt).getTime() - now)}</span>
       </div>
     </motion.section>

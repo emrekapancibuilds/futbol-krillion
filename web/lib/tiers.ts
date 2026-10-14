@@ -1,3 +1,5 @@
+import { MAX_STREAK_BONUS } from "./game/streak.ts";
+
 // Tier names, points and quips (spec §2). Icons are the pixel art in public/art.
 export const TIERS = [
   { tier: 1, name: "World Cup Bandwagon", points: 10, quip: "You only watch the World Cup.", icon: "/art/tier-1-bandwagon.png" },
@@ -9,7 +11,8 @@ export const TIERS = [
   { tier: 7, name: "Jobless", points: 1000, quip: "Go outside. Seriously.", icon: "/art/tier-7-jobless.png" },
 ] as const;
 
-export const MAX_SCORE = 7_000;
+// 7 rounds of Jobless, plus what a perfect streak earns (lib/game/streak.ts).
+export const MAX_SCORE = 7_000 + MAX_STREAK_BONUS;
 
 /** Tunnel colours for the reveal: wall, darker wall stripe, and the bright trim/light of each tier. */
 export const TIER_COLORS: Record<number, { wall: string; stripe: string; light: string }> = {
