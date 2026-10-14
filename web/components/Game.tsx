@@ -334,6 +334,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
 function Home({ day, done, onStart, busy }: { day: DayInfo; done: number; onStart: () => void; busy: boolean }) {
   return (
     <motion.section className="panel stack" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ gap: 16 }}>
+      <div className="wordmark" data-testid="wordmark">FUTKRILL</div>
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <img className="pixel" src="/art/mascot.png" alt="" style={{ width: 84 }} />
         <div>
