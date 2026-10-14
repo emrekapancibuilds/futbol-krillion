@@ -41,6 +41,8 @@ body {
   background:
     linear-gradient(rgba(3, 5, 16, 0.22), rgba(3, 5, 16, 0.22)),
     linear-gradient(180deg, rgba(7, 10, 24, 0.15) 0%, rgba(7, 10, 24, 0.55) 55%, rgba(7, 10, 24, 0.85) 100%);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
 }
 @media (min-width: 760px) {
   .stage { background-image: url("/art/stadium-wide.png"); }
@@ -205,7 +207,7 @@ img.pixel { image-rendering: pixelated; }
 .bar { height: 8px; background: #20263f; box-shadow: 0 0 0 2px #04050b; }
 .bar > div { height: 100%; background: var(--cyan); }
 
-/* The first page floats over a softly blurred patch of the stadium, without a card edge. */
+/* The first page floats directly over the uniformly blurred and darkened stadium, without a card edge. */
 .daily-home {
   position: relative;
   isolation: isolate;
@@ -214,18 +216,6 @@ img.pixel { image-rendering: pixelated; }
   gap: 14px;
   padding: 34px 0 30px;
   text-align: center;
-}
-.daily-home::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: -38px 0;
-  background: radial-gradient(ellipse at center, rgba(3, 5, 16, 0.84) 0%, rgba(3, 5, 16, 0.7) 52%, rgba(3, 5, 16, 0) 80%);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 44%, rgba(0, 0, 0, 0.78) 62%, transparent 82%);
-  mask-image: radial-gradient(ellipse at center, #000 44%, rgba(0, 0, 0, 0.78) 62%, transparent 82%);
-  pointer-events: none;
 }
 
 /* White pixel letters with a blocky gold outline, scaled to read as the centrepiece on phones and desktops. */
@@ -543,7 +533,6 @@ footer.small a { color: inherit; }
 @media (max-width: 480px) {
   .panel .streak-badge .streak-next { display: none; }   /* the result card still says what the next bonus is */
   .daily-home { gap: 12px; padding: 28px 0 24px; }
-  .daily-home::before { inset: -30px 0; }
   .unlock-modal { padding: 14px; gap: 10px; }
   .unlock-modal .title { font-size: 23px; }
   .unlock-pitch { gap: 9px; }
