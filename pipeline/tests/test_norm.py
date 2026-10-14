@@ -23,7 +23,7 @@ def test_combine_all_missing_is_nan():
 def test_rank_tiers_puts_missing_fame_last():
     out = rank_tiers(pd.Series([0.2, np.nan, 0.9], index=["x", "y", "z"]))
     assert out.loc["z", "fame_rank"] == 1 and out.loc["y", "fame_rank"] == 3
-    assert out.loc["y", "tier"] == 7 and out.loc["y", "points"] == 1000
+    assert out.loc["y", "tier"] == 7 and out.loc["y", "points"] == 200
 
 
 def test_log_scale_keeps_the_gap_at_the_top_that_percentiles_squash():

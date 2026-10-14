@@ -5,7 +5,8 @@
 // pushes some totals up). The user wanted it close to symmetrical rather than a long-tailed curve.
 //
 // Calibration (user, 2026-10-13): a total of 1,260 is about the 95th-96th percentile, and the 99th percentile starts
-// around 1,500. The shape below is fitted to that (roughly: 500 -> 40%, 1,000 -> 86%, 1,260 -> 95.8%, 1,500 -> 98.9%);
+// around 1,500. The points ladder then became 5 ... 200 (2026-10-14), a fifth of the old 10 ... 1,000, so the same
+// marks are now: 100 -> 40%, 200 -> 86%, 252 -> 95.8%, 300 -> 98.9% (constants below are the old ones times 0.2);
 // each day stretches it sideways a little (DAY_STRETCH) so days differ without moving those marks far.
 
 export type Standings = {
@@ -18,11 +19,11 @@ export type Standings = {
 const BINS = 56;
 const BLANK_SHARE = 0.03;   // players who scored nothing
 const SKEW = 1.5;           // skew-normal shape: 0 is a perfect bell, higher leans right
-const LOCATION = 290;       // skew-normal location and scale, in points, for an average day
-const SCALE = 478;
+const LOCATION = 58;        // skew-normal location and scale, in points, for an average day
+const SCALE = 95.6;
 const DAY_STRETCH = 0.03;   // each day is this much wider or narrower than average, at most
 const STEPS = 600;          // numeric integration steps over 0..TOP
-const TOP = 7000;
+const TOP = 1400;           // integrate over 0..TOP points (the tail beyond is negligible)
 
 /** Same seed (a daily's number, or an Unlimited round type and set), same field. */
 export function mockStandings(seed: string, score: number): Standings {
@@ -46,8 +47,8 @@ export function mockStandings(seed: string, score: number): Standings {
   const percentile = Math.max(0, Math.min(99, Math.floor(share * 100)));
 
   let q995 = 0;
-  while (q995 < TOP && below(q995) < 0.995) q995 += 10;
-  const max = Math.max(1000, Math.ceil(Math.max(q995, score * 1.12) / 250) * 250);
+  while (q995 < TOP && below(q995) < 0.995) q995 += 2;
+  const max = Math.max(200, Math.ceil(Math.max(q995, score * 1.12) / 50) * 50);
   const curve = Array.from({ length: BINS }, (_, i) => density(((i + 0.5) / BINS) * max));
   const peak = Math.max(...curve);
   return { players, percentile, max, curve: curve.map((v) => v / peak) };

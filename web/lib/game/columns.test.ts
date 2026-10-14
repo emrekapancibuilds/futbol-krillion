@@ -11,9 +11,9 @@ test("a column is as tall as the tier: 0 for a miss or pass, 1-7 for a tier", ()
 });
 
 const tiers = [
-  { tier: 1, points: 10, count: 40, top: [{ name: "Wayne Rooney", fact: "Man Utd" }] },
-  { tier: 5, points: 320, count: 30, top: [{ name: "Ilkay Gundogan", fact: "Man City" }] },
-  { tier: 6, points: 640, count: 0, top: [] },
+  { tier: 1, points: 5, count: 40, top: [{ name: "Wayne Rooney", fact: "Man Utd" }] },
+  { tier: 5, points: 60, count: 30, top: [{ name: "Ilkay Gundogan", fact: "Man City" }] },
+  { tier: 6, points: 100, count: 0, top: [] },
 ];
 
 test("the player's answer is marked where it already is in the list", () => {

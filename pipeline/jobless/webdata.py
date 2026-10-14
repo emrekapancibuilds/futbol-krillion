@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 from jobless.config import EXPORT, ROOT, TEAM_FAMILIES, TEAM_MIN_FAMOUS
+from jobless.tiers import tier_points
 
 WEB_DATA = ROOT.parent / "web" / "data"
 # Unlimited is free for now; shipping all ~1,000 Unlimited prompts would add ~48 MB, so a fixed slice goes out.
@@ -86,7 +87,7 @@ def build(export: Path = EXPORT, dest: Path = WEB_DATA) -> dict:
         _write(dest / "prompts" / f"{pid}.json", {
             "id": pid, "text": prompts.at[pid, "text"], "entityType": prompts.at[pid, "entity_type"],
             "answers": [{"id": r.entity_id, "name": entities.at[r.entity_id, "name"], "tier": int(r.tier),
-                         "points": int(r.points), "fact": r.fact, "variants": variants.get(r.entity_id, [])}
+                         "points": tier_points(int(r.tier)), "fact": r.fact, "variants": variants.get(r.entity_id, [])}
                         for r in g.itertuples()]})
 
     types = sorted({prompts.at[p, "entity_type"] for p in scheduled + unlimited})

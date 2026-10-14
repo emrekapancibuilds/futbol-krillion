@@ -36,7 +36,7 @@ export default function Standing({ seed, score, field }: { seed: string; score: 
     return () => { clearTimeout(wait); clearInterval(id); };
   }, [s.percentile, markerDelay]);
 
-  const step = s.max <= 1500 ? 250 : s.max <= 3000 ? 500 : 1000;   // round axis labels
+  const step = s.max <= 300 ? 50 : s.max <= 600 ? 100 : s.max <= 1200 ? 200 : 500;   // round axis labels
   const ticks = Array.from({ length: Math.floor(s.max / step) + 1 }, (_, i) => i * step);
   return (
     <div className="standing">

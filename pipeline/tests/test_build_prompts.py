@@ -150,14 +150,14 @@ def test_a_world_cup_field_is_tiered_inside_the_category_and_capped_at_season_ti
     assert prompts["key"].tolist() == ["nations:2026 World Cup"] and not rejects
     tier = answers.set_index("entity_id")["tier"]
     assert tier["t0"] == 1 and tier["t47"] == 4 and tier.max() == 4          # Curaçao-level: Season Ticket Holder, never Jobless
-    assert answers.set_index("entity_id").loc["t47", "points"] == 160
+    assert answers.set_index("entity_id").loc["t47", "points"] == 30
 
 
 def test_a_league_of_clubs_can_reach_true_analyst_but_not_further():
     ids, fame = teams(33, "club", "c")
     c = Candidate("clubs:la-liga", "clubs", "club", "Name a team that played in La Liga (2012–2026)", {i: "f" for i in ids})
     _, answers, _, _ = b.build([c], {"club": fame})
-    assert answers["tier"].max() == 5 and answers.loc[answers["tier"] == 5, "points"].iloc[0] == 320
+    assert answers["tier"].max() == 5 and answers.loc[answers["tier"] == 5, "points"].iloc[0] == 60
 
 
 def test_a_category_covering_every_club_in_europe_can_have_jobless_answers():
