@@ -332,16 +332,13 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
 }
 
 function Home({ day, done, onStart, busy }: { day: DayInfo; done: number; onStart: () => void; busy: boolean }) {
+  const mode = day.mode === "archive" ? "ARCHIVE" : "DAILY";
   return (
-    <motion.section className="panel stack" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ gap: 16 }}>
+    <motion.section className="daily-home" aria-label={`${mode === "DAILY" ? "Today's daily" : "Archive game"}`}
+                    initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <div className="wordmark" data-testid="wordmark">FUTKRILL</div>
-      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-        <img className="pixel" src="/art/mascot.png" alt="" style={{ width: 84 }} />
-        <div>
-          <h1 className="title">{day.mode === "archive" ? "Archive" : "Daily"} - {dayLabel(day.date)}</h1>
-          <p className="muted" style={{ margin: "6px 0 0" }}>7 football prompts. 30 seconds each. The more obscure your correct answer, the more you score, and back-to-back correct answers build a streak bonus.</p>
-        </div>
-      </div>
+      <h1 className="daily-title">{mode === "DAILY" ? mode : `Archive - ${dayLabel(day.date)}`}</h1>
+      <p className="daily-description">7 prompts · 30 seconds each · rarer answers score more</p>
       <button className="btn" onClick={onStart} disabled={busy}>{done > 0 ? `CONTINUE · ROUND ${done + 1}` : "KICK OFF"}</button>
     </motion.section>
   );

@@ -7,9 +7,9 @@ async function closePitch(page:Page){await expect(pitch(page)).toBeVisible();awa
 
 test('daily stays free; one-time pricing matches the existing pixel design on desktop and mobile',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/');await expect(page.getByRole('heading',{name:/^Daily - [A-Z][a-z]+ \d{1,2}$/})).toBeVisible();
+ await page.goto('/');await expect(page.getByRole('heading',{name:'DAILY'})).toBeVisible();
  await expect(page.getByText(/30 seconds each/)).toBeVisible();
- await expect(page.locator('section.panel').first()).toHaveCSS('opacity','1');
+ await expect(page.getByRole('region',{name:"Today's daily"})).toHaveCSS('opacity','1');
  await page.screenshot({path:'tests/browser/daily-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
@@ -170,12 +170,13 @@ test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE an
  await page.screenshot({path:'tests/browser/unlimited-subscriber-mobile.png',fullPage:true});
 });
 
-test('non-subscribers get the unlock pop-up first, buy button above the message; closing it leaves the page',async({page})=>{
+test('non-subscribers get a compact unlock pop-up with the buy button below the pitch; closing it leaves the page',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
  await page.goto('/unlimited');
  const note=pitch(page).getByText(/Hey, I.m Emre/);const buy=pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
  await expect(buy).toBeVisible();await expect(note).toBeVisible();
- expect((await buy.boundingBox())!.y).toBeLessThan((await note.boundingBox())!.y);
+ expect((await buy.boundingBox())!.y).toBeGreaterThan((await note.boundingBox())!.y);
+ expect((await pitch(page).boundingBox())!.height).toBeLessThan(700);
  await page.getByRole('button',{name:'Close',exact:true}).click();await expect(pitch(page)).toHaveCount(0);
  await page.reload();await expect(pitch(page)).toBeVisible();                       // every arrival
  await page.mouse.click(5,5);await expect(pitch(page)).toHaveCount(0);               // click outside also closes it
@@ -185,7 +186,7 @@ test('non-subscribers get the unlock pop-up first, buy button above the message;
  await expect(page.getByText(/Wrexham|two-club|No ads/)).toHaveCount(0);
  const panelNote=page.getByText(/Hey, I.m Emre/);const panelBuy=page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
  expect((await perks.boundingBox())!.y).toBeLessThan((await panelBuy.boundingBox())!.y);
- expect((await panelBuy.boundingBox())!.y).toBeLessThan((await panelNote.boundingBox())!.y);   // button above the message here too
+ expect((await panelBuy.boundingBox())!.y).toBeGreaterThan((await panelNote.boundingBox())!.y);   // CTA follows the pitch here too
  await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toHaveClass(/secondary/);
 });
 
@@ -352,11 +353,17 @@ test('the PITCH INVASION sign on a Jobless result has room around it, on a phone
  expect(n.y-(s.y+s.height)).toBeGreaterThanOrEqual(20);                                 // and below it, before the buttons
 });
 
-test('the first page is short: the day by its date, one line about the game, the start button, no tier list and no day number',async({page})=>{
+test('the first page is an unboxed centred title, Daily description and start button with no mascot or tier list',async({page})=>{
  await page.goto('/');
- const home=page.locator('section.panel').first();
- await expect(home.getByRole('heading')).toHaveText(/^Daily - [A-Z][a-z]+ \d{1,2}$/);
- await expect(home.getByRole('button',{name:'KICK OFF',exact:true})).toBeVisible();
+ const home=page.getByRole('region',{name:"Today's daily"});
+ const heading=home.getByRole('heading',{name:'DAILY'});
+ const description=home.getByText('7 prompts · 30 seconds each · rarer answers score more');
+ const start=home.getByRole('button',{name:'KICK OFF',exact:true});
+ await expect(heading).toBeVisible();await expect(description).toBeVisible();await expect(start).toBeVisible();
+ await expect(home).not.toHaveClass(/panel/);
+ await expect(home.locator('img[src="/art/mascot.png"]')).toHaveCount(0);
+ const [headingBox,descriptionBox,startBox]=await Promise.all([heading.boundingBox(),description.boundingBox(),start.boundingBox()]);
+ expect(descriptionBox!.y).toBeGreaterThan(headingBox!.y);expect(startBox!.y).toBeGreaterThan(descriptionBox!.y);
  for(const tier of ['World Cup Bandwagon','Glory Hunter','Part-Time Fan','Season Ticket Holder','True Analyst','Insane Ball Knowledge','Jobless']) await expect(home.getByText(tier)).toHaveCount(0);
  await expect(page.locator('.topbar .led')).not.toContainText('#');
  await expect(page.locator('main')).not.toContainText(/#\d/);
@@ -371,8 +378,6 @@ test('the first page has a big white FUTKRILL wordmark with a gold outline, and 
   await expect(mark).toHaveCSS('color','rgb(255, 255, 255)');
   expect(await mark.evaluate(e=>getComputedStyle(e).textShadow)).toContain('rgb(255, 206, 72)');   // the gold outline
   expect((await mark.boundingBox())!.height).toBeGreaterThanOrEqual(36);                            // large
-  const panel=page.locator('section.panel').first();
-  expect(await panel.evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);                          // nothing spills out of the card
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
 });
