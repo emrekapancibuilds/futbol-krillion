@@ -8,9 +8,10 @@ import { createPortal } from "react-dom";
 import { crowdReaction, type Reaction } from "@/lib/crowd-mood.ts";
 import { withYou, type TierList } from "@/lib/game/columns.ts";
 import { countdown } from "@/lib/game/countdown.ts";
+import { dayLabel, dayLabelShort } from "@/lib/game/dayLabel.ts";
 import { currentStreak, roundScore, scoreRound, SET_ROUNDS } from "@/lib/game/streak.ts";
 import { shareText, streakAfter } from "@/lib/share.ts";
-import { MAX_SCORE, TIER_COLORS, TIERS, tierInfo } from "@/lib/tiers.ts";
+import { MAX_SCORE, TIER_COLORS, tierInfo } from "@/lib/tiers.ts";
 
 import RoundColumns from "./RoundColumns.tsx";
 import Standing from "./Standing.tsx";
@@ -243,7 +244,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
           {/* Not mid-round: EXIT is the way out then, and the header has no room for both on a 375px phone. */}
           {phase !== "round" && phase !== "result" && <Link className="linkish" href="/unlimited">Unlimited</Link>}
           {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}
-          {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}#${day.number}`} · {fmt(landed ? total : total - (last ? roundScore(last) : 0))}</div>}
+          {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}${dayLabelShort(day.date)}`} · {fmt(landed ? total : total - (last ? roundScore(last) : 0))}</div>}
         </div>
       </header>
 
@@ -336,15 +337,10 @@ function Home({ day, done, onStart, busy }: { day: DayInfo; done: number; onStar
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <img className="pixel" src="/art/mascot.png" alt="" style={{ width: 84 }} />
         <div>
-          <h1 className="title">{day.mode === "archive" ? "Archive" : "Daily"} #{day.number}</h1>
+          <h1 className="title">{day.mode === "archive" ? "Archive" : "Daily"} - {dayLabel(day.date)}</h1>
           <p className="muted" style={{ margin: "6px 0 0" }}>7 football prompts. 30 seconds each. The more obscure your correct answer, the more you score, and back-to-back correct answers build a streak bonus.</p>
         </div>
       </div>
-      <ul className="tierlist">
-        {TIERS.map((t) => (
-          <li key={t.tier}><img className="pixel" src={t.icon} alt="" />{t.name}<span className="pts">{fmt(t.points)}</span></li>
-        ))}
-      </ul>
       <button className="btn" onClick={onStart} disabled={busy}>{done > 0 ? `CONTINUE · ROUND ${done + 1}` : "KICK OFF"}</button>
     </motion.section>
   );
@@ -520,7 +516,7 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
   };
   return (
     <motion.section className="panel stack" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ gap: 16 }}>
-      <div className="muted">FULL TIME · {day.mode === "archive" ? "ARCHIVE" : "DAILY"} #{day.number}</div>
+      <div className="muted">FULL TIME · {day.mode === "archive" ? "ARCHIVE" : "DAILY"} - {dayLabel(day.date).toUpperCase()}</div>
       <div><span className="big-score">{fmt(total)}</span><span className="muted"> / {fmt(MAX_SCORE)}</span></div>
       {day.mode !== "archive" && <Standing seed={`daily:${day.number}`} score={total} field={(n) => `TODAY'S ${n} PLAYERS`} />}
       <RoundColumns results={results} onOpen={onOpen} />
