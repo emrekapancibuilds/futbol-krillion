@@ -91,3 +91,37 @@ def test_team_tiers_break_ties_in_input_order_and_cap_never_exceeded():
     import pandas as pd
     tiers = team_tiers(pd.Series([5.0] * 40, index=[f"x{i}" for i in range(40)]), 5)
     assert tiers.max() == 5 and tiers.min() == 1 and tiers.is_monotonic_increasing
+
+
+# --- niche links (user, 2026-10-14): a famous player's short spell at a club makes the answer rarer ------------------
+import numpy as np
+
+from jobless.tiers import link_tier
+
+
+def test_a_short_spell_makes_a_famous_answer_rarer_by_how_few_apps():
+    # tier 5 so the star cap never gets in the way: 30+ apps 0 steps, 10-29 +1, 3-9 +2, 1-2 +3
+    assert [link_tier(5, a, 2005) for a in (200, 30, 29, 10, 9, 3, 2, 1)] == [5, 5, 6, 6, 7, 7, 7, 7]
+    assert [link_tier(2, a, 2005) for a in (200, 30, 29, 10)] == [2, 2, 3, 3]
+
+
+def test_a_star_is_never_pushed_past_season_ticket_holder_by_a_short_spell_alone():
+    """Messi isn't niche himself: tier 1-2 can fall to 4 at most, tier 3-4 to 5, whatever the appearances."""
+    assert link_tier(1, 5, 1993) == 3                       # Maradona at Newell's Old Boys
+    assert (link_tier(1, 1, 1993), link_tier(1, 2, 1993), link_tier(2, 1, 1993)) == (4, 4, 4)
+    assert (link_tier(3, 1, 1993), link_tier(4, 1, 1993), link_tier(4, 5, 1993)) == (5, 5, 5)
+    assert link_tier(7, 1, 1993) == 7 and link_tier(6, 3, 1993) == 7
+
+
+def test_unknown_apps_and_new_spells_change_nothing():
+    for apps in (None, np.nan, 0):
+        assert link_tier(1, apps, 2010) == 1
+    assert link_tier(1, 2, 2025) == 1 and link_tier(1, 2, 2026) == 1      # signed this season: too early to judge
+    assert link_tier(1, 2, 2024) == 4 and link_tier(1, 2, None) == 4 and link_tier(1, 2, np.nan) == 4
+
+
+def test_the_adjustment_only_ever_makes_an_answer_rarer():
+    for tier in range(1, 8):
+        for apps in (None, 0, 1, 2, 3, 9, 10, 29, 30, 500):
+            for start in (None, 1990, 2024, 2025):
+                assert tier <= link_tier(tier, apps, start) <= 7

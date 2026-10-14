@@ -194,3 +194,46 @@ def test_tournament_editions_with_nearly_the_same_teams_are_all_kept():
              for y, a in ((2016, 0), (2020, 2), (2024, 4))]               # 20 of 24 teams in common (Jaccard 0.71)
     prompts, _, _, rejects = b.build(cands, {"nation": fame})
     assert len(prompts) == 3 and not rejects
+
+
+def fame_one_star():
+    return pd.DataFrame({"name": ["Diego Maradona", "Gus Local", "Tim Cameo"], "fame": [0.99, 0.50, 0.40], "tier": [1, 4, 5],
+                         "points": [5, 30, 60]}, index=["Q1", "Q2", "Q3"])
+
+
+def test_a_short_spell_makes_the_answer_rarer_and_rescored_but_keeps_its_fame():
+    c = Candidate("club:newells", "club", "player", "Name a player who played for Newell's Old Boys",
+                  {"Q1": "5 apps for Newell's, 1993", "Q2": "200 apps for Newell's, 1990-1999", "Q3": "x"},
+                  links={"Q1": (5.0, 1993.0), "Q2": (200.0, 1990.0)})
+    a = b.answers_for(c, fame_one_star()).set_index("entity_id")
+    assert (a.loc["Q1", "tier"], a.loc["Q1", "points"], a.loc["Q1", "base_tier"]) == (3, 20, 1)       # Maradona: Part-Time Fan
+    assert (a.loc["Q2", "tier"], a.loc["Q2", "base_tier"]) == (4, 4)                                  # a long spell changes nothing
+    assert (a.loc["Q3", "tier"], a.loc["Q3", "base_tier"]) == (5, 5)                                  # no link data: untouched
+
+
+def test_prompts_without_link_data_keep_the_fame_tiers():
+    a = b.answers_for(Candidate("k", "club", "player", "t", {"Q1": "x", "Q2": "y"}), fame_one_star()).set_index("entity_id")
+    assert a["tier"].tolist() == a["base_tier"].tolist() == [1, 4]
+
+
+def test_build_keeps_the_fame_tier_beside_the_final_one():
+    fame = fame_for()
+    ids = list(fame.index)
+    c = Candidate("club:a", "club", "player", "Name a player who played for A", {i: "f" for i in ids},
+                  links={ids[0]: (1.0, 1999.0)})
+    _, answers, _, _ = b.build([c], {"player": fame})
+    first = answers.set_index("entity_id").loc[ids[0]]
+    assert (first["base_tier"], first["tier"]) == (1, 4)
+
+
+def test_the_report_lists_how_many_answers_niche_links_moved_and_the_biggest_movers():
+    prompts = pd.DataFrame({"prompt_id": ["pA"], "key": ["club:a"], "family": ["club"], "entity_type": ["player"],
+                            "text": ["Name a player who played for A"], "n_answers": [3], "ease": [0.5], "famous": [2],
+                            "mainstream": [True], "category": [None], "slot": ["club_easy"], "pool": ["daily"]})
+    answers = pd.DataFrame({"prompt_id": ["pA"] * 3, "entity_id": ["Q1", "Q2", "Q3"],
+                            "name": ["Diego Maradona", "Gus Local", "Tim Cameo"], "tier": [3, 4, 5], "base_tier": [1, 4, 5],
+                            "points": [20, 30, 60], "fact": ["5 apps for A, 1993", "x", "y"]})
+    text = b.report(prompts, __import__("collections").Counter(), {}, answers)
+    assert "## Niche links" in text and "1 of 3 answers" in text
+    assert "| Diego Maradona | Name a player who played for A | 5 apps for A, 1993 | 1 | 3 |" in text
+    assert "Gus Local" not in text.split("## Niche links")[1].split("Biggest movers")[1]

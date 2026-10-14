@@ -26,6 +26,14 @@ TIERS = [
     ("Insane Ball Knowledge", 100),
     ("Jobless", 200),
 ]
+# Niche links (user, 2026-10-14): in a club prompt a famous player's SHORT spell makes the answer rarer, because few
+# people think of Maradona for Newell's Old Boys. One way only: an answer is never made easier. (minimum apps, steps
+# rarer), best match first; unknown or zero apps change nothing, nor do spells that began in LINK_NEW_SPELL_YEAR or
+# later (too early to judge). A star isn't niche himself, so the steps stop at LINK_STAR_CAPS: the rarest tier a
+# short spell alone can push an answer of that fame tier to.
+LINK_STEPS = [(30, 0), (10, 1), (3, 2), (1, 3)]
+LINK_STAR_CAPS = {1: 4, 2: 4, 3: 5, 4: 5}
+LINK_NEW_SPELL_YEAR = 2025
 # Players: the last fame rank in each of tiers 1-6; everyone after rank 32,000 is Jobless. Fixed ranks, not
 # percentages: what a fan knows doesn't grow when the database adds more obscure players.
 # Middle boundaries loosened 2026-10-11 (user call): the fitted formula rated mid-level players too famous.
