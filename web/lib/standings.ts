@@ -16,7 +16,7 @@ export type Standings = {
   curve: number[];      // relative number of players per bin across the axis
 };
 
-const BINS = 56;
+const BINS = 112;           // columns across the axis (56 looked too chunky: user, 2026-10-14)
 const BLANK_SHARE = 0.03;   // players who scored nothing
 const SKEW = 1.5;           // skew-normal shape: 0 is a perfect bell, higher leans right
 const LOCATION = 58;        // skew-normal location and scale, in points, for an average day

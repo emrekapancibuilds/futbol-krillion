@@ -71,3 +71,9 @@ test("the curve has a visible tail past 252, so the marker doesn't sit past the 
   const lastTall = s.curve.reduce((acc, v, i) => (v > 0.02 ? i : acc), 0);       // last bar above 2% of the peak
   assert.ok((lastTall / s.curve.length) * s.max > 252, `curve ends at ${(lastTall / s.curve.length) * s.max}`);
 });
+
+test("the curve is drawn with many fine columns, not a few chunky ones (user, 2026-10-14)", () => {
+  const { curve } = mockStandings("daily:4", 120);
+  assert.ok(curve.length >= 100 && curve.length <= 160, `${curve.length} columns`);
+  assert.ok(curve.every((v) => v >= 0 && v <= 1));
+});
