@@ -32,6 +32,7 @@ class Candidate:
     mainstream: bool = True  # fit for the free daily (top 5 leagues); False = Unlimited only
     category: str | None = None  # Unlimited round type: a top-5 league key, "champions-league" or "international"
     scores: dict[str, float] | None = None  # team prompts: how well known each team is, to rank them inside the category
+    links: dict[str, tuple[float | None, float | None]] | None = None  # club prompts: answer id -> (apps for the club, latest spell start); tiers.link_tier
 
 
 @dataclass
@@ -79,6 +80,15 @@ def in_era(stints: pd.DataFrame, lo, hi) -> pd.Series:
         return pd.Series(True, index=stints.index)
     s, e = stints["start_year"], stints["end_year"]
     return (s.fillna(e) <= hi) & (e.fillna(s) >= lo)
+
+
+def _links(st: pd.DataFrame) -> dict[str, tuple[float | None, float | None]]:
+    """How strong each player's link to the club is: total apps over the given stints (None when none is known) and
+    when the latest spell began."""
+    g = st.groupby("player_id")
+    apps, start = g["apps"].sum(min_count=1), g["start_year"].max()
+    none = lambda x: None if pd.isna(x) else float(x)
+    return {pid: (none(apps[pid]), none(start[pid])) for pid in apps.index}
 
 
 def _best_stints(st: pd.DataFrame) -> pd.DataFrame:
@@ -134,12 +144,13 @@ def club_prompts(w: World):
         if not name or st["player_id"].nunique() < MIN_CLUB_PLAYERS:
             continue
         for era_key, lo, hi, suffix in ERAS:
-            best = _best_stints(st[in_era(st, lo, hi)])
+            era = st[in_era(st, lo, hi)]
+            best = _best_stints(era)
             if best.empty:
                 continue
             yield Candidate(f"club:{club_id}:{era_key}", "club", "player", f"Name a player who played for {name}{suffix}",
                             {r.player_id: facts.club_stint(r.apps, name, r.start_year, r.end_year)
-                             for r in best.itertuples()}, _top5(w, club_id))
+                             for r in best.itertuples()}, _top5(w, club_id), links=_links(era))
 
 
 def club_position_prompts(w: World):
@@ -156,7 +167,7 @@ def club_position_prompts(w: World):
                 yield Candidate(f"clubpos:{club_id}:{code}", "club_position", "player",
                                 f"Name a {word} who played for {name}",
                                 {r.player_id: facts.club_stint(r.apps, name, r.start_year, r.end_year)
-                                 for r in sel.itertuples()}, _top5(w, club_id))
+                                 for r in sel.itertuples()}, _top5(w, club_id), links=_links(st))
 
 
 def two_club_prompts(w: World):
@@ -249,7 +260,7 @@ def club_cl_prompts(w: World):
         yield Candidate(f"clubcl:{club_id}", "club_cl", "player",
                         f"Name a player who played for {name} in the Champions League{TM_ERA}",
                         {pid: facts.club_cl_line(r.apps, name, r.first, r.last) for pid, r in tot.iterrows()},
-                        _top5(w, club_id))
+                        _top5(w, club_id), links={pid: (float(r["apps"]), float(r["first"])) for pid, r in tot.iterrows()})
 
 
 def league_scorer_prompts(w: World):

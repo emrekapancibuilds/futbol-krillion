@@ -3,8 +3,8 @@ import math
 
 import pandas as pd
 
-from jobless.config import (PLAYER_TIER_RANKS, TEAM_CAP_BEYOND, TEAM_CAPS, TEAM_TIER_FRACTIONS, TIER_UPPER_FRACTION,
-                            TIERS)
+from jobless.config import (LINK_NEW_SPELL_YEAR, LINK_STAR_CAPS, LINK_STEPS, PLAYER_TIER_RANKS, TEAM_CAP_BEYOND, TEAM_CAPS,
+                            TEAM_TIER_FRACTIONS, TIER_UPPER_FRACTION, TIERS)
 
 
 def tier_cutoffs(population: int) -> list[int]:
@@ -51,3 +51,15 @@ def team_tiers(scores: pd.Series, cap: int) -> pd.Series:
     cuts = [math.ceil(f * n) for f in fractions]
     tiers = order.map(lambda r: next(t for t, cut in enumerate(cuts, start=1) if r <= cut))
     return pd.Series(tiers.values, index=scores.index)
+
+
+def link_tier(tier: int, apps, latest_start=None) -> int:
+    """The tier of a club answer after its niche link (config.LINK_STEPS): few apps for the club in the prompt make a
+    famous player's answer rarer, never easier. `apps` unknown (or 0), or a spell that began in LINK_NEW_SPELL_YEAR or
+    later, change nothing; the steps stop at LINK_STAR_CAPS so a star never becomes obscure on a short spell alone."""
+    if apps is None or pd.isna(apps) or apps < 1:
+        return tier
+    if latest_start is not None and not pd.isna(latest_start) and latest_start >= LINK_NEW_SPELL_YEAR:
+        return tier
+    steps = next(s for floor, s in LINK_STEPS if apps >= floor)
+    return min(tier + steps, max(tier, LINK_STAR_CAPS.get(tier, len(TIERS))))

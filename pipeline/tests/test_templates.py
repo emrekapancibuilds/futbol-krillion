@@ -267,3 +267,19 @@ def test_some_team_prompts_beyond_the_top_five_can_be_dailies_but_not_all(world)
     assert c["clubs:europe:Netherlands"].mainstream and c["clubs:europe:Turkey"].mainstream
     assert not c["clubs:europe:Malta"].mainstream
     assert not c["league:eredivisie"].mainstream            # players: still only the top 5
+
+
+def test_club_answers_carry_how_strong_the_link_is(world):
+    """Total apps for the club in the prompt's era and when the latest spell began; None where apps aren't known."""
+    c = by_key(world)
+    assert c["club:Qars:all"].links["Q1"] == (254.0, 1999.0) and c["club:Qars:all"].links["Q3"] == (564.0, 1990.0)
+    assert c["club:Qars:all"].links["Q2"] == (None, 1899.0)                      # apps unknown
+    assert c["clubpos:Qars:GK"].links["Q3"] == (564.0, 1990.0)
+    assert c["clubcl:Qars"].links["Q1"] == (3.0, 2012.0)                         # Champions League apps, first season
+
+
+def test_apps_of_several_spells_at_one_club_add_up(world):
+    extra = pd.DataFrame({"player_id": ["Q1"], "club_id": ["Qars"], "start_year": [2010.0], "end_year": [2012.0],
+                          "apps": [10.0], "goals": [1.0], "source": "wd"})
+    world.stints = pd.concat([world.stints, extra], ignore_index=True)
+    assert by_key(world)["club:Qars:all"].links["Q1"] == (264.0, 2010.0)

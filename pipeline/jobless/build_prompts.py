@@ -8,7 +8,7 @@ import pandas as pd
 from jobless.config import NATION_DISPLAY, OUT, TEAM_FAMILIES, TEAM_MIN_ANSWERS, TEAM_MIN_FAMOUS
 from jobless.gates import MAX_OVERLAP, check, check_team, dedupe
 from jobless.templates import Candidate, generate, load_world
-from jobless.tiers import team_cap, team_tiers, tier_points
+from jobless.tiers import link_tier, team_cap, team_tiers, tier_points
 
 FAMILY_ORDER = ["club", "club_cl", "internationals", "league", "champions", "nation_league", "tournament", "honours", "two_clubs",
                 "club_position", "nation_position", "league_position", "league_scorers", "clubs", "managers", "stadiums",
@@ -43,6 +43,11 @@ def answers_for(c: Candidate, fame: pd.DataFrame) -> pd.DataFrame:
         # where they sit among every club or nation in the world.
         scores = pd.Series(c.scores).reindex(a["entity_id"]).fillna(0.0).values if c.scores else a["fame"].values
         a["tier"] = team_tiers(pd.Series(scores), team_cap(c.entity_type, len(a))).values
+        a["points"] = a["tier"].map(tier_points)
+    a["base_tier"] = a["tier"]                              # the fame tier, kept beside the final one for the report
+    if c.links and c.family not in TEAM_FAMILIES and not a.empty:
+        # A short spell makes a famous player's answer rarer (tiers.link_tier); the fame tier stays in base_tier.
+        a["tier"] = [link_tier(t, *c.links.get(e, (None, None))) for t, e in zip(a["tier"], a["entity_id"])]
         a["points"] = a["tier"].map(tier_points)
     return a
 
@@ -121,7 +126,7 @@ def build(candidates: list[Candidate], fame_by_type: dict[str, pd.DataFrame], se
         rows.append({"prompt_id": pid, "key": c.key, "family": c.family, "entity_type": c.entity_type, "text": c.text,
                      "n_answers": len(a), "ease": float((a["tier"] <= 3).mean()), "famous": int((a["tier"] <= 3).sum()),
                      "mainstream": c.mainstream, "category": c.category})
-        answer_rows.append(a.assign(prompt_id=pid)[["prompt_id", "entity_id", "name", "tier", "points", "fact"]])
+        answer_rows.append(a.assign(prompt_id=pid)[["prompt_id", "entity_id", "name", "tier", "base_tier", "points", "fact"]])
     prompts = pd.DataFrame(rows, columns=["prompt_id", "key", "family", "entity_type", "text", "n_answers", "ease",
                                           "famous", "mainstream", "category"])
     if not prompts.empty:
@@ -138,7 +143,22 @@ def days_covered(prompts: pd.DataFrame) -> int:
     return len(daily) // 7
 
 
-def report(prompts, generated, rejects) -> str:
+def link_report(prompts, answers: pd.DataFrame, top: int = 40) -> list[str]:
+    """How many answers a short spell moved to a rarer tier, and the most famous players it moved the furthest."""
+    moved = answers[answers["tier"] > answers["base_tier"]]
+    lines = ["", "## Niche links", "", f"{len(moved):,} of {len(answers):,} answers moved to a rarer tier (fame tier -> tier).", "",
+             "| Fame tier | " + " | ".join(f"to {t}" for t in range(2, 8)) + " |", "|---|" + "---|" * 6]
+    for base, g in moved.groupby("base_tier"):
+        counts = g["tier"].value_counts()
+        lines.append(f"| {base} | " + " | ".join(str(int(counts.get(t, 0))) for t in range(2, 8)) + " |")
+    text = prompts.set_index("prompt_id")["text"]
+    big = moved.assign(step=moved["tier"] - moved["base_tier"]).sort_values(["base_tier", "step"], ascending=[True, False]).head(top)
+    lines += ["", f"Biggest movers (the {top} most famous players moved):", "", "| Player | Prompt | Fact | Fame tier | Tier |", "|---|---|---|---|---|"]
+    lines += [f"| {r.name} | {text.get(r.prompt_id, '')} | {r.fact} | {r.base_tier} | {r.tier} |" for r in big.itertuples()]
+    return lines
+
+
+def report(prompts, generated, rejects, answers=None) -> str:
     lines = ["# Prompt build report", "", "| Family | Generated | Passed |", "|---|---|---|"]
     passed = prompts["family"].value_counts() if not prompts.empty else pd.Series(dtype=int)
     lines += [f"| {f} | {generated[f]} | {int(passed.get(f, 0))} |" for f in FAMILY_ORDER if generated[f]]
@@ -150,6 +170,8 @@ def report(prompts, generated, rejects) -> str:
             lines.append(f"| {slot} | {(g['pool'] == 'daily').sum()} | {(g['pool'] == 'unlimited').sum()} |")
         lines += ["", f"**Days of dailies covered: {days_covered(prompts)}** (target {DAILY_DAYS}). "
                   f"Unlimited prompts: {(prompts['pool'] == 'unlimited').sum()} (target 1,500)."]
+    if answers is not None and "base_tier" in answers and not answers.empty:
+        lines += link_report(prompts, answers)
     return "\n".join(lines) + "\n"
 
 
@@ -174,7 +196,7 @@ def main() -> int:
     prompts, answers, generated, rejects = build(generate(load_world()), fame_tables(), pinned=pinned)
     prompts.to_parquet(OUT / "prompts.parquet", index=False)
     answers.to_parquet(OUT / "prompt_answers.parquet", index=False)
-    (OUT / "build_report.md").write_text(report(prompts, generated, rejects))
+    (OUT / "build_report.md").write_text(report(prompts, generated, rejects, answers))
     print(f"prompts: {len(prompts):,} passed; days of dailies covered: {days_covered(prompts)}")
     return 0
 
