@@ -243,6 +243,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
         <div className="right">
           {/* Not mid-round: EXIT is the way out then, and the header has no room for both on a 375px phone. */}
           {phase !== "round" && phase !== "result" && <Link className="linkish" href="/unlimited">Unlimited</Link>}
+          {phase !== "round" && phase !== "result" && <Link className="linkish hide-narrow" href="/niche">Niche-o-meter</Link>}
           {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}
           {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}${dayLabelShort(day.date)}`} · {fmt(landed ? total : total - (last ? roundScore(last) : 0))}</div>}
         </div>
@@ -340,6 +341,7 @@ function Home({ day, done, onStart, busy }: { day: DayInfo; done: number; onStar
       <h1 className="daily-title">{mode === "DAILY" ? mode : `Archive - ${dayLabel(day.date)}`}</h1>
       <p className="daily-description">7 prompts · 30 seconds each · rarer answers score more</p>
       <button className="btn" onClick={onStart} disabled={busy}>{done > 0 ? `CONTINUE · ROUND ${done + 1}` : "KICK OFF"}</button>
+      <Link className="btn secondary" href="/niche">NICHE-O-METER</Link>
     </motion.section>
   );
 }

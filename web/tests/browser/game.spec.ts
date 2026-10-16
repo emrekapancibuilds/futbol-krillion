@@ -381,3 +381,84 @@ test('the first page has a big white FUTKRILL wordmark with a gold outline, and 
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
 });
+
+// --- Niche-o-meter (user, 2026-10-16) ----------------------------------------------------------------------------
+test('niche-o-meter: the intro pops up only the very first time, and a reload never shows it again',async({page})=>{
+ await page.goto('/niche');
+ const intro=page.getByRole('dialog',{name:/Niche-o-meter/});
+ await expect(intro).toBeVisible();
+ await expect(intro).toContainText('how niche they are');
+ await expect(intro).toContainText("nothing here counts");
+ await intro.getByRole('button',{name:'GOT IT'}).click();
+ await expect(intro).toHaveCount(0);
+ await page.reload();
+ await expect(page.getByRole('heading',{name:'Niche-o-meter'})).toBeVisible();
+ await page.waitForTimeout(800);
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.goto('/');await page.getByRole('link',{name:'NICHE-O-METER'}).click();            // another visit, same browser
+ await expect(page).toHaveURL(/\/niche$/);
+ await page.waitForTimeout(800);
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('niche-o-meter: type a player, pick them, get a score out of 100 with a label and no points',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('fk:niche-seen','1'));
+ await page.goto('/niche');
+ await expect(page.getByRole('button',{name:'MEASURE'})).toBeDisabled();
+ await page.getByPlaceholder('type a player').fill('lionel mes');
+ const first=page.getByRole('list',{name:'Players'}).getByRole('button').first();
+ await expect(first).toContainText('Lionel Messi');
+ await expect(first).toContainText('Argentina');
+ await first.click();
+ await expect(page.getByTestId('niche-result')).toContainText('Lionel Messi');
+ await expect(page.getByTestId('niche-score')).toHaveText('1');
+ await expect(page.getByTestId('niche-label')).toHaveText('Everyone has heard of them');
+ await expect(page.getByTestId('niche-known')).toHaveText('Nobody we track is better known.');
+ // nothing about the game was touched
+ const keys=await page.evaluate(()=>Object.keys(localStorage).sort());
+ expect(keys).toEqual(['fk:niche-seen']);
+});
+
+test('niche-o-meter: Enter measures the best match, and a very obscure player scores higher than a star but never 97+ with fame',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('fk:niche-seen','1'));
+ await page.goto('/niche');
+ await page.getByPlaceholder('type a player').fill('Odysseas Vlachodimos');
+ await expect(page.getByRole('list',{name:'Players'})).toBeVisible();
+ await page.keyboard.press('Enter');
+ await expect(page.getByTestId('niche-result')).toContainText('Vlachodimos');
+ await expect.poll(async()=>Number(await page.getByTestId('niche-score').textContent()),{timeout:5000}).toBeGreaterThan(15);
+ const mid=Number(await page.getByTestId('niche-score').textContent());
+ expect(mid).toBeLessThanOrEqual(96);
+});
+
+test('niche-o-meter: a name we have never heard of says so, with no score',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('fk:niche-seen','1'));
+ await page.goto('/niche');
+ await page.getByPlaceholder('type a player').fill('qzxqzxqzx');
+ await expect(page.getByTestId('niche-unknown')).toHaveText("Even we don't know who that is");
+ await expect(page.getByTestId('niche-score')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'MEASURE'})).toBeDisabled();
+});
+
+test('niche-o-meter: the API only answers real searches and a stale answer never overwrites a newer one',async({page})=>{
+ const ok=await page.request.get('/api/niche?q=haaland');
+ expect(ok.status()).toBe(200);
+ const body=await ok.json();
+ expect(body.total).toBe(178258);
+ expect(body.results[0].name).toBe('Erling Haaland');
+ expect(body.results.length).toBeLessThanOrEqual(6);
+ expect((await (await page.request.get('/api/niche?q=a')).json()).results).toEqual([]);          // one letter is too short
+ expect((await page.request.get('/api/niche?q='+'x'.repeat(500))).status()).toBe(400);
+});
+
+test('niche-o-meter: it is linked from the first page and the header on a wide screen, and not squeezed into a phone header',async({page})=>{
+ await page.setViewportSize({width:1100,height:800});
+ await page.goto('/');
+ await expect(page.locator('.topbar').getByRole('link',{name:'Niche-o-meter'})).toBeVisible();
+ await page.setViewportSize({width:375,height:812});
+ await page.goto('/');
+ await expect(page.locator('.topbar').getByRole('link',{name:'Niche-o-meter'})).toBeHidden();
+ await expect(page.getByRole('link',{name:'NICHE-O-METER'})).toBeVisible();
+ const led=await page.locator('.topbar .led').boundingBox();expect(led!.x+led!.width).toBeLessThanOrEqual(375);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
