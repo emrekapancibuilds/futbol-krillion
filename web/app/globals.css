@@ -540,3 +540,34 @@ footer.small a { color: inherit; }
   .billing-terms { font-size: 14px; }
   .unlock-modal .btn { font-size: 18px; padding: 12px 10px; }
 }
+
+/* Niche-o-meter (components/NicheOMeter.tsx) */
+.niche .niche-form { grid-template-columns: minmax(0, 1fr) auto; }
+.niche-suggest { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.niche-suggest button {
+  width: 100%; text-align: left; display: grid; gap: 2px; padding: 10px 12px; cursor: pointer;
+  background: #10142a; color: var(--ink); border: 0; box-shadow: 0 0 0 2px #04050b, 0 0 0 4px #262c4c;
+  font-family: var(--font-body), sans-serif; font-size: 17px;
+}
+.niche-suggest button:hover, .niche-suggest button:focus-visible { box-shadow: 0 0 0 2px #04050b, 0 0 0 4px var(--cyan); outline: none; }
+.niche-suggest small { color: var(--muted); font-size: 13px; }
+.niche-unknown {
+  font-family: var(--font-display), monospace; font-size: 22px; line-height: 1.25; text-align: center; color: var(--gold);
+  padding: 18px 8px; text-shadow: 2px 2px 0 #6b4400;
+}
+.niche-result { display: grid; gap: 8px; text-align: center; justify-items: center; }
+.niche-name { font-family: var(--font-display), monospace; font-size: 24px; line-height: 1.2; }
+.niche-line { font-size: 14px; }
+.niche-score { display: flex; align-items: baseline; gap: 8px; justify-content: center; }
+.niche-score span { font-family: var(--font-display), monospace; font-size: 84px; line-height: 1; color: var(--gold); text-shadow: 4px 4px 0 #6b4400; }
+.niche-score small { color: var(--muted); font-size: 18px; }
+.niche-meter { display: grid; grid-template-columns: repeat(25, 1fr); gap: 3px; width: 100%; height: 26px; }
+.niche-meter span { background: #1a1f38; box-shadow: 0 0 0 1px #04050b; }
+.niche-meter span.on { box-shadow: 0 0 0 1px #04050b, 0 0 10px -2px currentColor; }
+.niche-ends { display: flex; justify-content: space-between; width: 100%; font-size: 11px; letter-spacing: 1px; }
+.niche-label { font-family: var(--font-display), monospace; font-size: 22px; color: var(--cyan); margin-top: 4px; }
+.niche-fine { font-size: 13px; text-align: center; margin: 0; }
+.niche-intro { display: grid; gap: 12px; }
+.niche-intro p { margin: 0; }
+@media (max-width: 420px) { .niche-score span { font-size: 68px; } .niche-name { font-size: 21px; } }
+@media (max-width: 479px) { .hide-narrow { display: none; } }      /* the 375px header is full */
