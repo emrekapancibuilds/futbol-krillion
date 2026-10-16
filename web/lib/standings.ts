@@ -1,13 +1,15 @@
 // "How you stack up" after a set of 7: a MOCK score distribution until real results are collected (user,
 // 2026-10-11: "we can make it real in production"). Replace mockStandings with real counts when there is a backend.
 //
-// Shape: a few blank cards, then a bell of totals with a mild lean to the right (a skew-normal: the odd rare pick
-// pushes some totals up). The user wanted it close to symmetrical rather than a long-tailed curve.
+// Shape: a few blank cards, then a symmetrical bell of totals, centered on the chart (a skew-normal with shape 0, so
+// a plain normal). The user wanted it close to symmetrical (2026-10-11) and centered (2026-10-16).
 //
-// Calibration (user, 2026-10-13): a total of 1,260 is about the 95th-96th percentile, and the 99th percentile starts
-// around 1,500. The points ladder then became 5 ... 200 (2026-10-14), a fifth of the old 10 ... 1,000, so the same
-// marks are now: 100 -> 40%, 200 -> 86%, 252 -> 95.8%, 300 -> 98.9% (constants below are the old ones times 0.2);
-// each day stretches it sideways a little (DAY_STRETCH) so days differ without moving those marks far.
+// Calibration (user, 2026-10-16: "a bit stricter: 500 should be about the 95th percentile, and the curve centered"):
+// the middle of the field is 300, 500 is the 95th percentile (300 + 1.645 x 121.6), 200 -> 20%, 400 -> 80%, and the
+// 99th percentile starts near 583. The x axis runs 0..600 (twice the middle), so the peak sits in the middle of the
+// chart; only a score past the axis stretches it. History: 1,260 was 95.8% on the old 10 ... 1,000 ladder, then 252 on
+// the 5 ... 200 ladder (2026-10-14); that bell sat on the left of the chart. Each day stretches the bell sideways a
+// little (DAY_STRETCH) so days differ without moving those marks far.
 
 export type Standings = {
   players: number;      // field size, 10,000-20,000
@@ -18,10 +20,10 @@ export type Standings = {
 
 const BINS = 112;           // columns across the axis (56 looked too chunky: user, 2026-10-14)
 const BLANK_SHARE = 0.03;   // players who scored nothing
-const SKEW = 1.5;           // skew-normal shape: 0 is a perfect bell, higher leans right
-const LOCATION = 58;        // skew-normal location and scale, in points, for an average day
-const SCALE = 95.6;
-const DAY_STRETCH = 0.03;   // each day is this much wider or narrower than average, at most
+const SKEW = 0;             // skew-normal shape: 0 is a perfect bell, higher leans right
+const LOCATION = 300;       // the middle of the field and its spread, in points, for an average day
+const SCALE = 121.6;
+const DAY_STRETCH = 0.02;   // each day is this much wider or narrower than average, at most
 const STEPS = 600;          // numeric integration steps over 0..TOP
 const TOP = 1400;           // integrate over 0..TOP points (the tail beyond is negligible)
 
@@ -46,9 +48,8 @@ export function mockStandings(seed: string, score: number): Standings {
   const share = score <= 0 ? 0 : BLANK_SHARE + (1 - BLANK_SHARE) * below(score);
   const percentile = Math.max(0, Math.min(99, Math.floor(share * 100)));
 
-  let q995 = 0;
-  while (q995 < TOP && below(q995) < 0.995) q995 += 2;
-  const max = Math.max(200, Math.ceil(Math.max(q995, score * 1.12) / 50) * 50);
+  const centered = Math.round((2 * LOCATION * stretch) / 50) * 50;                // the peak sits in the middle of the chart
+  const max = Math.max(centered, Math.ceil((score * 1.12) / 50) * 50);
   const curve = Array.from({ length: BINS }, (_, i) => density(((i + 0.5) / BINS) * max));
   const peak = Math.max(...curve);
   return { players, percentile, max, curve: curve.map((v) => v / peak) };
