@@ -495,3 +495,18 @@ test('phones get the tall scene, and with Reduced Motion it holds one still fram
  await page.waitForTimeout(1200);
  expect((await sceneSnapshot(page)).h).toBe(a.h);
 });
+
+test('niche-o-meter: a slow first answer from the server (a cold start) is retried quietly instead of showing an error',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('fk:niche-seen','1'));
+ let calls=0;
+ await page.route('**/api/niche?**',async r=>{
+  calls++;
+  if(calls===1) return r.fulfill({status:504,contentType:'text/html',body:'<html>An error occurred</html>'});
+  return r.continue();
+ });
+ await page.goto('/niche');
+ await page.getByPlaceholder('type a player').fill('lionel messi');
+ await expect(page.getByRole('list',{name:'Players'}).getByRole('button').first()).toContainText('Lionel Messi',{timeout:15000});
+ await expect(page.getByText("Couldn't reach the server")).toHaveCount(0);
+ expect(calls).toBeGreaterThanOrEqual(2);
+});
