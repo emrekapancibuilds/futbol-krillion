@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, Pixelify_Sans } from "next/font/google";
 
+import Scene from "@/components/Scene.tsx";
+
 import "./globals.css";
 
 // Pixelify Sans for headings, buttons, scores and the scoreboard; Chakra Petch (squared and sporty, but smooth) for the
@@ -30,9 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body>
         <div className="stage" aria-hidden>
-          <div className="crowd c1" />
-          <div className="crowd c2" />
-          <div className="crowd c3" />
+          <Scene />
         </div>
         {children}
       </body>
