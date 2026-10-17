@@ -16,7 +16,7 @@ test("a ray through the middle of the screen runs down the tunnel; one near an e
   assert.equal(bottom.surface, "floor");
   assert.ok(bottom.u > 0 && bottom.u < 1);                    // right of the guide line, inside the tunnel
   // the hit distance agrees with the wall it hit
-  assert.ok(Math.abs(left.t * Math.abs((2 + 0.5 - W / 2) / F) - HW) < 1e-9);
+  assert.ok(Math.abs(left.t * Math.abs((2 - W / 2) / F) - HW) < 1e-9);
 });
 
 test("every smash freezes the picture for a beat, longer for deeper gates and longest for the final one", () => {
@@ -32,7 +32,7 @@ test("after the last gate the camera glides out of the tunnel until the stadium 
   assert.equal(before, tier * GAP - LEAD);
   assert.ok(after > before);
   const exitAt = tier * GAP + EXIT;
-  assert.ok(exitCover(exitAt - after) >= 1, `the opening covers ${exitCover(exitAt - after)} of the screen`);
+  assert.ok(exitCover(exitAt - after) >= 1.08, `the opening covers ${exitCover(exitAt - after)} of the screen`);   // with room for the shake
   assert.ok(exitCover(exitAt - before) < 0.5);              // far off at first: a bright doorway at the end
   assert.ok(settleCam(tier, 0.5) > before && settleCam(tier, 0.5) < after);
 });

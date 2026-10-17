@@ -7,7 +7,8 @@ export const GAP = 3;
 export const LEAD = 0.9;           // the camera trails the ball by this much
 export const VIEW = 7;
 export const EXIT = 1.4;           // the last stretch of tunnel after the final gate, ending at the stadium
-const FILL_AT = 0.8;               // distance from the opening at which it covers the whole screen (see exitCover)
+export const FOCAL = 0.4375;       // focal length as a share of the canvas width
+const FILL_AT = 2 * HW * FOCAL;     // distance at which the opening (the tunnel's cross-section) just fills the screen
 
 export type Hit = { t: number; surface: "wall" | "ceiling" | "floor"; u: number };
 
@@ -35,7 +36,7 @@ export function exitCover(d: number): number {
  *  fills the screen, easing out. */
 export function settleCam(tier: number, u: number): number {
   const from = tier * GAP - LEAD;
-  const to = tier * GAP + EXIT - FILL_AT;
+  const to = tier * GAP + EXIT - FILL_AT * 0.9;        // a little past full: the shake zoom never shows an edge
   const k = Math.max(0, Math.min(1, u));
   return from + (to - from) * (1 - (1 - k) * (1 - k));
 }
