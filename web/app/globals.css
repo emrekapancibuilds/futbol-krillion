@@ -201,7 +201,7 @@ img.pixel { image-rendering: pixelated; }
   left: max(-22%, calc((100% - 100vw) / 2 + 20px));
   right: max(-22%, calc((100% - 100vw) / 2 + 20px));
   pointer-events: none;
-  background: radial-gradient(ellipse 52% 50% at 50% 48%, rgba(4, 6, 16, 0.88) 0%, rgba(4, 6, 16, 0.74) 42%, rgba(4, 6, 16, 0.3) 72%, rgba(4, 6, 16, 0) 100%);
+  background: radial-gradient(ellipse 54% 52% at 50% 48%, rgba(4, 6, 16, 0.9) 0%, rgba(4, 6, 16, 0.8) 46%, rgba(4, 6, 16, 0.34) 74%, rgba(4, 6, 16, 0) 100%);
 }
 .daily-description, .daily-title { text-shadow: 0 1px 0 #04060f, 0 0 12px rgba(4, 6, 16, 0.95); }
 
