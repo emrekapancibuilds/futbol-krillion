@@ -462,3 +462,36 @@ test('niche-o-meter: it is linked from the first page and the header on a wide s
  const led=await page.locator('.topbar .led').boundingBox();expect(led!.x+led!.width).toBeLessThanOrEqual(375);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+// --- The live matchday scene (2026-10-16) ------------------------------------------------------------------------
+const sceneSnapshot=(page:import('@playwright/test').Page)=>page.getByTestId('scene').evaluate((c:HTMLCanvasElement)=>{
+ const ctx=c.getContext('2d')!;const d=ctx.getImageData(0,0,c.width,c.height).data;let h=0,lit=0;
+ for(let i=0;i<d.length;i+=4*97){h=(h*31+d[i]+d[i+1]*3+d[i+2]*7)>>>0;if(d[i]+d[i+1]+d[i+2]>60)lit++;}
+ return {h,lit,w:c.width,hgt:c.height};
+});
+
+test('the matchday scene draws behind every page and keeps moving',async({page})=>{
+ await page.setViewportSize({width:1100,height:800});
+ await page.goto('/');
+ const scene=page.getByTestId('scene');
+ await expect(scene).toHaveAttribute('data-ready','wide',{timeout:20000});
+ await expect(scene).toHaveAttribute('aria-hidden','true');
+ const a=await sceneSnapshot(page);
+ expect(a.lit).toBeGreaterThan(500);                                                    // a picture, not a blank canvas
+ await page.waitForTimeout(1200);
+ const b=await sceneSnapshot(page);
+ expect(b.h).not.toBe(a.h);                                                             // the crowd, flashes and lights move
+ await page.goto('/terms');
+ await expect(page.getByTestId('scene')).toHaveAttribute('data-ready','wide',{timeout:20000});
+});
+
+test('phones get the tall scene, and with Reduced Motion it holds one still frame',async({page})=>{
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/');
+ await expect(page.getByTestId('scene')).toHaveAttribute('data-ready','tall',{timeout:20000});
+ const a=await sceneSnapshot(page);
+ expect(a.lit).toBeGreaterThan(300);
+ await page.waitForTimeout(1200);
+ expect((await sceneSnapshot(page)).h).toBe(a.h);
+});
