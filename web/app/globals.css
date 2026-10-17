@@ -552,3 +552,88 @@ footer.small a { color: inherit; }
 .niche-intro p { margin: 0; }
 @media (max-width: 420px) { .niche-score span { font-size: 68px; } .niche-name { font-size: 21px; } }
 @media (max-width: 479px) { .hide-narrow { display: none; } }      /* the 375px header is full */
+
+/* ---------------------------------------------------------------- polish (2026-10-17)
+   One considered treatment for every surface on top of the live scene: panels lit from above with pixel rivets in
+   the corners and a gold hairline, lifted off the scene by a shadow; buttons that respond to hover, press and focus;
+   inset inputs with a gold caret; a soft pop-in for dialogs. Movement only when the visitor allows motion. */
+:root {
+  --panel-hi: #5d6aa8;
+  --panel-top: rgba(22, 27, 56, 0.96);
+  --panel-bottom: rgba(7, 9, 22, 0.97);
+}
+* { -webkit-tap-highlight-color: transparent; }
+html { scrollbar-color: #3a4270 #070a18; }
+::selection { background: var(--gold); color: #1a1204; }
+
+.panel {
+  position: relative;
+  background:
+    linear-gradient(var(--panel-hi), var(--panel-hi)) 6px 6px / 3px 3px no-repeat,
+    linear-gradient(var(--panel-hi), var(--panel-hi)) calc(100% - 6px) 6px / 3px 3px no-repeat,
+    linear-gradient(var(--panel-hi), var(--panel-hi)) 6px calc(100% - 6px) / 3px 3px no-repeat,
+    linear-gradient(var(--panel-hi), var(--panel-hi)) calc(100% - 6px) calc(100% - 6px) / 3px 3px no-repeat,
+    linear-gradient(180deg, var(--panel-top), var(--panel-bottom) 55%);
+  box-shadow:
+    0 0 0 3px #04050b, 0 0 0 6px var(--panel-edge),
+    inset 0 2px 0 rgba(160, 175, 255, 0.1), inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 10px 0 2px rgba(2, 3, 10, 0.35), 0 26px 50px rgba(0, 0, 0, 0.5);
+}
+.panel::before {                     /* a gold hairline along the top of the frame */
+  content: "";
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: -3px;
+  height: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 206, 72, 0), rgba(255, 206, 72, 0.85), rgba(255, 206, 72, 0));
+}
+.panel .title { text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45); }
+.modal { scrollbar-width: thin; scrollbar-color: #3a4270 transparent; }
+
+.btn {
+  box-shadow: 0 0 0 3px #3a2a00, inset 0 -5px 0 #d68c18, inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 6px 0 -1px rgba(2, 3, 10, 0.35);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn:hover:not(:disabled) { filter: brightness(1.07) saturate(1.05); }
+.btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 3px #3a2a00, inset 0 -2px 0 #d68c18, inset 0 2px 0 rgba(255, 255, 255, 0.3);
+}
+.btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 5px; }
+.btn.secondary {
+  box-shadow: 0 0 0 3px #0a0c18, inset 0 -4px 0 #11152a, inset 0 2px 0 rgba(160, 175, 255, 0.14), 0 6px 0 -1px rgba(2, 3, 10, 0.35);
+  text-shadow: none;
+}
+.btn.secondary:hover:not(:disabled) { background: #283053; filter: none; }
+.btn.secondary:active:not(:disabled) { box-shadow: 0 0 0 3px #0a0c18, inset 0 -1px 0 #11152a; }
+.btn:disabled { text-shadow: none; }
+
+/* plain links inside panels (the refund link in the unlock pop-up was browser-default dark blue on navy) */
+.panel a:not(.btn):not(.linkish) { color: var(--cyan); }
+.linkish:hover, footer a:hover, .legal-links a:hover, .panel a:not(.btn):hover { color: #a8ecff; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+.answer-row input {
+  background: linear-gradient(180deg, #03040a, #080b18);
+  box-shadow: 0 0 0 3px #000, 0 0 0 5px var(--panel-edge), inset 0 3px 0 rgba(0, 0, 0, 0.6);
+  caret-color: var(--gold);
+}
+.answer-row input::placeholder { color: #5a6288; }
+.answer-row input:focus {
+  box-shadow: 0 0 0 3px #000, 0 0 0 5px var(--gold), 0 0 18px rgba(255, 206, 72, 0.22), inset 0 3px 0 rgba(0, 0, 0, 0.6);
+}
+.restore-form input { caret-color: var(--gold); }
+.restore-form input:focus { border-color: var(--gold); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn { transition: transform 90ms ease-out, filter 120ms, box-shadow 90ms, background-color 120ms; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn:active:not(:disabled) { transform: translateY(2px); }
+  .answer-row input { transition: box-shadow 140ms; }
+  .modal-back { animation: fk-fade-in 160ms ease-out; }
+  .modal.answers, .modal.niche-intro { animation: fk-pop-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.15); }
+}
+@keyframes fk-fade-in { from { opacity: 0; } }
+@keyframes fk-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
