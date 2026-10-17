@@ -87,11 +87,11 @@ function makeCracks(): [number, number][][] {
   });
 }
 
-/** The stadium for the walkout: the site's own scene (back, pitch, players) as pixels, ready to sample. */
+/** The stadium for the walkout: the site's own scene at rest (art/scene.py's "still" picture) as pixels, ready to sample. */
 async function loadStadium(w: number, h: number) {
   const name = pickComposition(w, h);
   const meta = await fetch(`/art/scene/${name}.json`).then((r) => r.json() as Promise<SceneMeta>);
-  const layers = await Promise.all(["back", "pitch", "players-1"].map((l) => new Promise<HTMLImageElement>((ok, fail) => {
+  const layers = await Promise.all(["still"].map((l) => new Promise<HTMLImageElement>((ok, fail) => {
     const im = new Image();
     im.onload = () => ok(im);
     im.onerror = fail;

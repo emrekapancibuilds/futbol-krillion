@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { activeFlashes, breathFrame, coverFit, crowdFrame, dustAt, LAYER_DEPTH, PARALLAX, parallax, pickComposition,
+import { activeFlashes, breathFrame, confettiAt, coverFit, crowdFrame, dustAt, fieldState, flareFlicker, LAYER_DEPTH, litFlares,
+         PARALLAX, parallax, pickComposition, ribbonOffset, smokeAt, twinkle, WAVE_HALF, waveAt,
          type SceneMeta } from "./engine.ts";
 
 const meta = (name: "wide" | "tall"): SceneMeta =>
@@ -91,4 +92,101 @@ test("the players breathe in and out slowly, and dust drifts inside the picture"
       assert.ok(d.x >= 0 && d.x < 496 && d.y >= 0 && d.y < 282 && d.a >= 0 && d.a <= 1);
     }
   }
+});
+
+const player = { home: -9, range: 3, speed: 2.6, seed: 4 };
+
+test("players up the pitch jog to a new spot now and then and stay near home, without ever jumping", () => {
+  let prev = fieldState(player, 0);
+  let moved = 0;
+  for (let t = 0.02; t < 120; t += 0.02) {
+    const s = fieldState(player, t);
+    assert.ok(Math.abs(s.x - player.home) <= player.range + 1e-9, `${t}: ${s.x}`);
+    assert.ok(Math.abs(s.x - prev.x) <= 0.2, `${t}: jumped from ${prev.x} to ${s.x}`);       // under 10 m/s
+    if (Math.abs(s.x - prev.x) > 1e-6) moved++;
+    prev = s;
+  }
+  assert.ok(moved > 700 && moved < 4800, `${moved} moving steps in 2 minutes`);              // sometimes running, sometimes not
+  assert.deepEqual(fieldState(player, 33.3), fieldState(player, 33.3));
+});
+
+test("a running player faces where he's going and cycles his legs as he covers ground; a resting one faces the ball", () => {
+  const runFrames = new Set<number>();
+  for (let t = 0.02; t < 120; t += 0.02) {
+    const [prev, s, next] = [fieldState(player, t - 0.02), fieldState(player, t), fieldState(player, t + 0.02)];
+    const before = s.x - prev.x, after = next.x - s.x;
+    if (Math.abs(before) > 1e-6 && Math.abs(after) > 1e-6) {             // in the middle of a run
+      assert.ok(s.frame >= 2 && s.frame <= 5, `${t}: frame ${s.frame}`);
+      assert.equal(s.dir, after > 0 ? 1 : -1, `${t}: running ${after} facing ${s.dir}`);
+      runFrames.add(s.frame);
+    } else if (Math.abs(before) < 1e-6 && Math.abs(after) < 1e-6) {      // standing still
+      assert.ok(s.frame === 0 || s.frame === 1, `${t}: resting in frame ${s.frame}`);
+      assert.equal(s.dir, 1, "the left team rests facing the ball, to the right");
+    }
+  }
+  assert.equal(runFrames.size, 4);
+  assert.equal(fieldState({ ...player, home: 12 }, 0.5).dir, -1);
+});
+
+test("LED text scrolls a whole pixel at a time and wraps around its strip, either way", () => {
+  for (const [speed, period] of [[9, 212], [-6, 178]] as const) {
+    for (const t of [0, 0.37, 5, 123.4]) {
+      const o = ribbonOffset(t, speed, period);
+      assert.ok(Number.isInteger(o) && o >= 0 && o < period, `${speed} ${t}: ${o}`);
+    }
+  }
+  assert.equal(ribbonOffset(0, 9, 212), 0);
+  assert.notEqual(ribbonOffset(1, 9, 212), ribbonOffset(1, -9, 212));
+});
+
+test("a Mexican wave travels across the stands now and then, more often after a rare answer, never after a miss", () => {
+  const W = 512;
+  const seen = (mood: "calm" | "normal" | "hype") => {
+    const xs: number[] = [];
+    for (let t = 0; t < 120; t += 0.1) { const x = waveAt(mood, t, W); if (x !== null) xs.push(x); }
+    return xs;
+  };
+  assert.equal(seen("calm").length, 0);
+  const normal = seen("normal"), hype = seen("hype");
+  assert.ok(normal.length > 0 && hype.length > normal.length, `${normal.length} ${hype.length}`);
+  assert.ok([...normal, ...hype].every((x) => x >= -WAVE_HALF && x <= W + WAVE_HALF));
+  // it moves one way, steadily
+  let last = -Infinity;
+  for (let t = 0; t < 26; t += 0.1) {
+    const x = waveAt("normal", t, W);
+    if (x === null) { last = -Infinity; continue; }
+    assert.ok(x >= last, `${t}: ${x} after ${last}`);
+    last = x;
+  }
+});
+
+test("stars twinkle, flares flicker and smoke rises from them, all within bounds", () => {
+  for (let t = 0; t < 30; t += 0.37) {
+    for (let i = 0; i < 20; i++) {
+      const b = twinkle(i, t);
+      assert.ok(b >= 0.15 && b <= 1, `${i} ${t}: ${b}`);
+      const f = flareFlicker(i, t);
+      assert.ok(f >= 0.55 && f <= 1, `${i} ${t}: ${f}`);
+    }
+    for (const p of smokeAt(t, 2, 24)) {
+      assert.ok(p.dy <= 0 && p.dy >= -60, `smoke at ${p.dy}`);
+      assert.ok(p.size >= 1 && p.size <= 4 && Number.isInteger(p.size));
+      assert.ok(p.a >= 0 && p.a <= 0.6);
+    }
+  }
+  assert.equal(smokeAt(3, 1, 24).length, 24);
+  assert.deepEqual(litFlares("calm", 5), 2);
+  assert.ok(litFlares("normal", 5) < litFlares("hype", 5) && litFlares("hype", 5) === 5);
+  assert.equal(litFlares("hype", 0), 0);
+});
+
+test("confetti tumbles down inside the picture", () => {
+  for (const t of [0, 1.7, 44.4]) {
+    const c = confettiAt(t, 90, 512, 328);
+    assert.equal(c.length, 90);
+    for (const p of c) assert.ok(p.x >= 0 && p.x < 512 && p.y >= 0 && p.y < 328 && p.c >= 0 && p.c < 4);
+  }
+  // pieces fall: on average they are lower a moment later
+  const a = confettiAt(10, 90, 512, 1e6), b = confettiAt(10.5, 90, 512, 1e6);
+  assert.ok(b.reduce((s, p) => s + p.y, 0) > a.reduce((s, p) => s + p.y, 0));
 });

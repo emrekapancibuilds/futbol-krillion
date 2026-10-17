@@ -1,18 +1,25 @@
 "use client";
 
-// The live matchday scene behind every page (spec: docs/superpowers/specs/2026-10-16-matchday-scene-design.md).
-// Draws the layers made by art/scene.py on one canvas, at a whole-number scale of the device pixels so the pixel art
-// stays crisp, and animates them: the crowd (its mood comes from the game, on <body data-crowd>), camera flashes,
-// floodlight flicker and breathing light shafts, dust in the light, the players breathing, the grass swaying, a slow
-// camera drift and pointer parallax. Pauses while the tab is hidden; with Reduced Motion it draws one still frame.
+// The live matchday scene behind every page (specs: docs/superpowers/specs/2026-10-16-matchday-scene-design.md and
+// 2026-10-17-scene-2-design.md). Draws the layers made by art/scene.py on one canvas, at a whole-number scale of the
+// device pixels so the pixel art stays crisp, and animates them: twinkling stars and drifting clouds, scrolling LED
+// boards, the crowd (its mood comes from the game, on <body data-crowd>) with a Mexican wave now and then, camera
+// flashes, flares and their smoke, floodlight flicker and breathing light shafts, the players up the pitch jogging
+// about, the two in front breathing, dust in the light, confetti after a rare answer, the grass swaying, a slow camera
+// drift and pointer parallax. Pauses while the tab is hidden; with Reduced Motion it draws one still frame.
 
 import { useEffect, useRef } from "react";
 
-import { activeFlashes, breathFrame, coverFit, crowdFrame, dustAt, LAYER_DEPTH, parallax, pickComposition, swayFrame,
+import { activeFlashes, breathFrame, confettiAt, coverFit, crowdFrame, dustAt, FIELD_FRAMES, fieldState, flareFlicker,
+         LAYER_DEPTH, litFlares, parallax, pickComposition, ribbonOffset, smokeAt, swayFrame, twinkle, WAVE_HALF, waveAt,
          type Composition, type Mood, type SceneMeta } from "@/lib/scene/engine.ts";
 
-const LAYERS = ["back", "crowd-1", "crowd-2", "crowd-3", "pitch", "players-1", "players-2", "front-1", "front-2", "glow", "beams"];
+const LAYERS = ["sky", "clouds", "strips", "back", "crowd-1", "crowd-2", "crowd-3", "crowd-4", "pitch", "field",
+                "players-1", "players-2", "front-1", "front-2", "glow", "beams"];
 const FRAME_MS = 1000 / 30;
+const STAR_COLOURS = ["#7d88b8", "#c4ccf0", "#ffffff"];
+const CONFETTI = ["#ffd24a", "#f4f6ff", "#3aa8c8", "#e0483c"];
+const CLOUD_SPEED = 1.2;      // art pixels a second
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -100,9 +107,54 @@ export default function Scene() {
         ctx.drawImage(im, dx + o.x, dy + o.y, m.w * scale, m.h * scale);
       };
 
+      const at = (o: { x: number; y: number }, x: number, y: number) => [dx + o.x + x * scale, dy + o.y + y * scale] as const;
+      const px = (o: { x: number; y: number }, x: number, y: number, w = 1, h = 1) => {
+        const [X, Y] = at(o, x, y);
+        ctx.fillRect(X, Y, w * scale, h * scale);
+      };
+
+      // the sky: gradient, twinkling stars, clouds drifting by (wrapping around)
+      layer("sky", LAYER_DEPTH.sky);
+      {
+        const o = offset(LAYER_DEPTH.sky);
+        m.stars.forEach(([x, y, b], i) => {
+          ctx.globalAlpha = (still ? 0.7 : twinkle(i, time)) * (0.55 + 0.225 * b);
+          ctx.fillStyle = STAR_COLOURS[b];
+          px(o, x, y);
+        });
+        ctx.globalAlpha = 1;
+        const off = still ? 0 : ribbonOffset(time, CLOUD_SPEED, m.w);
+        for (const k of [0, -1]) {
+          const [X, Y] = at(o, off + k * m.w, 0);
+          ctx.drawImage(images.clouds, X, Y, m.w * scale, m.h * scale);
+        }
+      }
+
+      // the LED boards scroll underneath the holes in the back layer
+      {
+        const o = offset(LAYER_DEPTH.back);
+        for (const r of m.ribbons) {
+          const off = still ? 0 : ribbonOffset(time, r.speed, r.period);
+          for (let x = -off; x < m.w; x += r.period) {
+            const [X, Y] = at(o, x, r.y);
+            ctx.drawImage(images.strips, 0, r.sy, r.period, r.h, X, Y, r.period * scale, r.h * scale);
+          }
+        }
+      }
+
       layer("back", LAYER_DEPTH.back);
       const cf = still ? 0 : crowdFrame(mood, beat, time);
       if (cf) layer(`crowd-${cf}`, LAYER_DEPTH.back);
+      // the Mexican wave: a band of supporters on their feet, arms up, travelling across the stands with a ragged edge
+      const wx = still ? null : waveAt(mood, time, m.w);
+      if (wx !== null) {
+        const o = offset(LAYER_DEPTH.back);
+        for (let x = Math.max(0, Math.floor(wx - WAVE_HALF)) & ~1; x < Math.min(m.w, wx + WAVE_HALF); x += 2) {
+          if (Math.abs(x + 1 - wx) > WAVE_HALF * (0.65 + 0.35 * Math.abs(Math.sin(x * 12.9898)))) continue;
+          const [X, Y] = at(o, x, 0);
+          ctx.drawImage(images["crowd-4"], x, 0, 2, m.h, X, Y, 2 * scale, m.h * scale);
+        }
+      }
       layer("beams", LAYER_DEPTH.back, 0.4 + 0.14 * Math.sin(time * 0.6), "lighter");
 
       // camera flashes in the stands: a white pixel and, at its brightest, a little cross of light
@@ -111,21 +163,75 @@ export default function Scene() {
         ctx.globalCompositeOperation = "lighter";
         for (const f of activeFlashes(mood, time, m.seats)) {
           const [sx, sy, w] = m.seats[f.seat];
-          const x = dx + o.x + (sx + Math.floor(w / 2)) * scale;
-          const y = dy + o.y + (sy - 1) * scale;
+          const x = sx + Math.floor(w / 2), y = sy - 1;
           ctx.globalAlpha = 1 - f.age;
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(x, y, scale, scale);
+          px(o, x, y);
           if (f.age < 0.45) {
             ctx.globalAlpha = (0.45 - f.age) * 1.4;
             ctx.fillStyle = "#cfe8ff";
-            ctx.fillRect(x - scale, y, scale, scale); ctx.fillRect(x + scale, y, scale, scale);
-            ctx.fillRect(x, y - scale, scale, scale); ctx.fillRect(x, y + scale, scale, scale);
+            px(o, x - 1, y); px(o, x + 1, y); px(o, x, y - 1); px(o, x, y + 1);
           }
         }
       }
 
+      // flares: smoke rising and drifting, a red glow, a white-hot core
+      if (!still) {
+        const o = offset(LAYER_DEPTH.back);
+        const lit = litFlares(mood, m.flares.length);
+        for (let k = 0; k < lit; k++) {
+          const [fx, fy] = m.flares[k];
+          const f = flareFlicker(k, time);
+          ctx.globalCompositeOperation = "source-over";
+          for (const p of smokeAt(time, k, mood === "hype" ? 30 : 22)) {
+            ctx.globalAlpha = p.a;
+            ctx.fillStyle = p.dy > -9 ? "#c47a78" : p.dy > -24 ? "#9a8296" : "#7a7f9c";
+            px(o, Math.round(fx + p.dx - p.size / 2), Math.round(fy + p.dy - p.size / 2), p.size, p.size);
+          }
+          ctx.globalCompositeOperation = "lighter";
+          const [cx, cy] = at(o, fx + 0.5, fy + 0.5);
+          const r = 9 * scale * f;
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          g.addColorStop(0, "rgba(255,96,40,0.6)");
+          g.addColorStop(1, "rgba(255,40,20,0)");
+          ctx.globalAlpha = f;
+          ctx.fillStyle = g;
+          ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+          ctx.globalCompositeOperation = "source-over";
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = f > 0.8 ? "#fff4d0" : "#ffb040";
+          px(o, fx, fy);
+          ctx.fillStyle = "#ff5a28";
+          px(o, fx, fy - 1);
+        }
+      }
+
       layer("pitch", LAYER_DEPTH.pitch);
+
+      // the players up the pitch: shadows first, then each player, furthest first
+      {
+        const o = offset(LAYER_DEPTH.pitch);
+        const states = m.field.map((p) => (still ? { x: p.home, dir: p.home < 0 ? 1 : -1, frame: 0 } : fieldState(p, time)));
+        const feet = m.field.map((p, i) => Math.round(p.feet[0] + p.ppm * (states[i].x - p.home)));
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "#020a05";
+        m.field.forEach((p, i) => {
+          const contact = Math.max(2, Math.round(p.ppm * 0.9)), long = Math.max(3, Math.round(p.ppm * 1.8));
+          ctx.globalAlpha = 0.14;
+          px(o, feet[i] - long, p.feet[1], 2 * long, 1);
+          ctx.globalAlpha = 0.42;
+          px(o, feet[i] - Math.floor(contact / 2), p.feet[1], contact, 1);
+        });
+        ctx.globalAlpha = 1;
+        m.field.forEach((p, i) => {
+          const s = states[i];
+          const [cx, cy, cw, ch] = p.cell;
+          const k = s.frame + (s.dir < 0 ? FIELD_FRAMES : 0);
+          const [X, Y] = at(o, Math.round(feet[i] - p.anchor[0]), p.feet[1] - p.anchor[1]);
+          ctx.drawImage(images.field, cx + k * cw, cy, cw, ch, X, Y, cw * scale, ch * scale);
+        });
+      }
+
       layer(`players-${breathFrame(time) + 1}`, LAYER_DEPTH.players);
 
       // dust drifting through the light
@@ -135,7 +241,18 @@ export default function Scene() {
         ctx.fillStyle = "#ffe7b0";
         for (const d of dustAt(time, 46, m.w, m.h * 0.75)) {
           ctx.globalAlpha = d.a * 0.35;
-          ctx.fillRect(dx + o.x + Math.floor(d.x) * scale, dy + o.y + Math.floor(d.y) * scale, scale, scale);
+          px(o, Math.floor(d.x), Math.floor(d.y));
+        }
+      }
+
+      // confetti after a rare answer
+      if (!still && mood === "hype") {
+        const o = offset(LAYER_DEPTH.front);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 0.92;
+        for (const p of confettiAt(time, 170, m.w, m.h)) {
+          ctx.fillStyle = CONFETTI[p.c];
+          px(o, Math.floor(p.x), Math.floor(p.y), p.wide ? 2 : 1, p.wide ? 1 : 2);     // tumbling: flat, then edge-on
         }
       }
 
