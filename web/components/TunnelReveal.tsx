@@ -1,40 +1,43 @@
 "use client";
 
-// The tier reveal: a first-person run down a stadium tunnel. A football smashes through one gate per tier,
-// faster at each gate, and the tunnel beyond takes the next tier's colour. The last gate opens onto the walkout light.
-// Each smash: cracks spread across the gate as the ball closes in, then a camera punch, the ball squashing, a
-// shockwave ring, sparks, tumbling bricks and dust, and the broken gate with a jagged hole blowing open as we pass.
-// It all hits harder the deeper the gate. Fills its box (the whole screen): about 120 canvas pixels across the short
-// side, scaled up crisp by CSS.
+// The tier reveal, Smash 2.0 (spec: docs/superpowers/specs/2026-10-16-matchday-scene-design.md): a first-person run
+// down a stadium tunnel. A football smashes through one gate per tier, faster at each gate, and the tunnel beyond
+// takes the next tier's colour; after the last gate the camera walks out into the stadium from the site background.
+//
+// The tunnel is ray-cast per pixel into an image buffer (concrete panels, steel ribs, a strip light along the ceiling,
+// light pools on a floor with a guide line), and so are the gates (bricks, a steel frame with rivets, hazard stripes),
+// with ordered dithering so it stays pixel art. Each smash: cracks spread as the ball closes in, then a hit-stop
+// freeze, a camera punch and jolt, the ball squashing, a shockwave, sparks, tumbling bricks and dust, a colour-split
+// flash, and the broken gate with a jagged hole blowing open as we pass. It hits harder the deeper the gate.
+// About 200 canvas pixels on the short side, scaled up crisp by CSS.
 
 import { useEffect, useRef } from "react";
 
 import { depthAt, revealTimeline, TEMPO } from "@/lib/reveal/timeline.ts";
+import { EXIT, FOCAL, GAP, hitStopMs, HW, LEAD, settleCam, VIEW } from "@/lib/reveal/tunnel.ts";
+import { pickComposition, type SceneMeta } from "@/lib/scene/engine.ts";
 import { TIER_COLORS, TIERS } from "@/lib/tiers.ts";
 
-const HW = 1;               // tunnel half width, world units; the half height follows the screen's shape
-const GAP = 3;              // tunnel length between two gates: long enough to see the next gate coming
-const LEAD = 0.9;           // the camera trails the ball by this much
-const VIEW = 7;             // draw distance
-const STEP = 0.25;          // depth of one wall slice (alternating stripes)
 const BALL_R = 0.11;
 const BALL_Y = 0.16;        // the ball flies a little below the centre line, and hits the gate there
 const CRACK_RANGE = 1.3;    // cracks start spreading when the ball is this close to a gate
 // Effect timings follow the run's tempo (80% speed).
-const RING_MS = 280 / TEMPO;
+const RING_MS = 300 / TEMPO;
 const HOLE_MS = 150 / TEMPO;        // the hole in a smashed gate blows open over this long
 const PUNCH_MS = 220 / TEMPO;
 const SQUASH_MS = 90 / TEMPO;
 const SHAKE_MS = 320 / TEMPO;
-const SETTLE_MS = 700 / TEMPO;      // the camera glides into the light after the last smash
-const LANDED_DELAY_MS = 140; // the white flash shows before the banner
-const STOP_AFTER_MS = 2600; // the loop stops this long after landing; the last frame stays
+const SPLIT_MS = 150;               // the colour-split flash after a smash
+const SETTLE_MS = 900 / TEMPO;      // the walkout into the stadium after the last smash
+const LANDED_DELAY_MS = 140;        // the white flash shows before the banner
+const STOP_AFTER_MS = 2600;         // the loop stops this long after landing; the last frame stays
+const SHORT_SIDE = 200;             // canvas pixels on the screen's short side
 
+type Rgb = [number, number, number];
 type Debris = { kind: "brick" | "chip" | "dust"; x: number; y: number; z: number; vx: number; vy: number; vz: number;
                 size: number; rot: number; spin: number; c: Rgb; edge: Rgb; born: number; life: number };
 type Spark = { x: number; y: number; vx: number; vy: number; c: string; born: number; life: number };
 type Smash = { gate: number; at: number };
-type Rgb = [number, number, number];
 
 const hex = (h: string): Rgb => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -42,10 +45,22 @@ const css = (c: Rgb, alpha = 1) => (alpha >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${
 const BLACK: Rgb = [0, 0, 0];
 const WHITE: Rgb = [255, 255, 255];
 const DUST: Rgb = [150, 140, 128];
+const CONCRETE: Rgb = [62, 68, 90];
+const STEEL: Rgb = [118, 126, 150];
+const CEILING: Rgb = [20, 22, 32];
+const FLOOR: Rgb = [38, 40, 54];
+const GUIDE: Rgb = [206, 212, 222];
 const PALETTE = Object.fromEntries(Object.entries(TIER_COLORS).map(([k, v]) => [k, {
   wall: hex(v.wall), stripe: hex(v.stripe), light: hex(v.light),
 }])) as Record<number, { wall: Rgb; stripe: Rgb; light: Rgb }>;
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;   // roughly -1..1, centre-heavy
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
+const fract = (v: number) => v - Math.floor(v);
+const hash2 = (a: number, b: number) => {
+  let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
 
 // Pentagon centres of a football: the 12 vertices of an icosahedron.
 const PHI = (1 + Math.sqrt(5)) / 2;
@@ -57,19 +72,37 @@ const PATCHES = [[0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI], [1, PHI
 
 /** Spider cracks for one gate, in wall units from the impact point: a few jagged lines, each a list of points. */
 function makeCracks(): [number, number][][] {
-  return Array.from({ length: 9 }, (_, i) => {
-    let a = (i / 9) * Math.PI * 2 + Math.random() * 0.5;
+  return Array.from({ length: 10 }, (_, i) => {
+    let a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
     let x = 0, y = 0;
     const len = 0.5 + Math.random() * 0.9;
     const pts: [number, number][] = [[0, 0]];
-    for (let k = 0; k < 7; k++) {
+    for (let k = 0; k < 8; k++) {
       a += (Math.random() - 0.5) * 0.8;
-      x += Math.cos(a) * len / 7;
-      y += Math.sin(a) * len / 7;
+      x += Math.cos(a) * len / 8;
+      y += Math.sin(a) * len / 8;
       pts.push([x, y]);
     }
     return pts;
   });
+}
+
+/** The stadium for the walkout: the site's own scene (back, pitch, players) as pixels, ready to sample. */
+async function loadStadium(w: number, h: number) {
+  const name = pickComposition(w, h);
+  const meta = await fetch(`/art/scene/${name}.json`).then((r) => r.json() as Promise<SceneMeta>);
+  const layers = await Promise.all(["back", "pitch", "players-1"].map((l) => new Promise<HTMLImageElement>((ok, fail) => {
+    const im = new Image();
+    im.onload = () => ok(im);
+    im.onerror = fail;
+    im.src = `/art/scene/${name}-${l}.png`;
+  })));
+  const off = document.createElement("canvas");
+  off.width = meta.w; off.height = meta.h;
+  const c = off.getContext("2d");
+  if (!c) throw new Error("no 2d context");
+  for (const im of layers) c.drawImage(im, 0, 0);
+  return { meta, px: new Uint32Array(c.getImageData(0, 0, meta.w, meta.h).data.buffer) };
 }
 
 export default function TunnelReveal({ tier, onSmash, onLanded }: {
@@ -78,14 +111,14 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const skipRef = useRef(false);
   const callbacks = useRef({ onSmash, onLanded });
-  callbacks.current = { onSmash, onLanded };
+  useEffect(() => { callbacks.current = { onSmash, onLanded }; });   // the latest callbacks, without restarting the run
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
     const box = canvas.getBoundingClientRect();
-    const scale = Math.max(2, Math.min(box.width, box.height) / 120);
+    const scale = Math.max(2, Math.min(box.width, box.height) / SHORT_SIDE);
     const W = Math.max(40, Math.round(box.width / scale));
     const H = Math.max(40, Math.round(box.height / scale));
     canvas.width = W;
@@ -93,14 +126,19 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     ctx.imageSmoothingEnabled = false;                  // after resizing: that resets the context
     const CX = W / 2;
     const VY = H / 2;
-    const F0 = 0.4375 * W;                              // focal length: the tunnel fills the width just ahead
+    const F0 = FOCAL * W;                               // focal length: the tunnel fills the width just ahead
     const HH = (HW * H) / W;                            // a cross-section the shape of the screen
     const PX = W / 160;                                 // screen-space speeds scale with the canvas
     const tl = revealTimeline(tier);
+    const exitZ = tl.tier * GAP + EXIT;
     const icons = TIERS.map((t) => Object.assign(new Image(), { src: t.icon }));
     const cracks = Array.from({ length: 8 }, makeCracks);
-    const jags = Array.from({ length: 8 }, () => Array.from({ length: 18 }, () => 0.7 + Math.random() * 0.6));
+    const jags = Array.from({ length: 8 }, () => Array.from({ length: 22 }, () => 0.7 + Math.random() * 0.6));
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const image = ctx.createImageData(W, H);
+    const buf = new Uint32Array(image.data.buffer);
+    let stadium: Awaited<ReturnType<typeof loadStadium>> | null = null;
+    loadStadium(W, H).then((s) => { stadium = s; }).catch(() => { /* the walkout falls back to plain light */ });
 
     let t0 = performance.now();
     let last = t0;
@@ -108,8 +146,10 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     let landed = false;
     let raf = 0;
     let F = F0;
+    let freezeUntil = 0;
     let shake = { amp: 0, at: 0 };
     let flash = { amp: 0, at: 0, ms: 120 };
+    let split = { amp: 0, at: -1e9 };
     let lastSmash: Smash = { gate: 0, at: -1e9 };
     const debris: Debris[] = [];
     const sparks: Spark[] = [];
@@ -121,6 +161,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       debris.length = 0;
       sparks.length = 0;
       smashes.length = 0;
+      freezeUntil = 0;
       flash = { amp: withFlash ? 1 : 0, at: tl.landAt + SETTLE_MS, ms: 300 };
     };
     if (reduce) skipToEnd(t0, false);
@@ -150,131 +191,250 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         const y = Math.max(-HH, Math.min(HH, BALL_Y + gauss() * HH * spread));
         return { x, y, dx: x, dy: y - BALL_Y };
       };
-      for (let i = 0; i < Math.round(70 * k); i++) {          // chunky bricks, tumbling towards us
+      for (let i = 0; i < Math.round(110 * k); i++) {         // chunky bricks, tumbling towards us
         const { x, y, dx, dy } = piece(0.7);
         const r = Math.random();
         const c = r < 0.55 ? p.wall : r < 0.85 ? p.stripe : p.light;
         debris.push({ kind: "brick", x, y, z, born: t, life: 1500, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 24,
-                      size: (0.05 + Math.random() * 0.11) * (0.8 + 0.4 * k),
+                      size: (0.045 + Math.random() * 0.1) * (0.8 + 0.4 * k),
                       vx: dx * (2 + Math.random() * 4) + gauss() * 0.4, vy: dy * (2 + Math.random() * 4) - Math.random() * 0.9,
-                      vz: -(1.5 + Math.random() * 4.5) * k, c, edge: mix(c, BLACK, 0.5) });
+                      vz: -(1.5 + Math.random() * 4.5) * k, c, edge: mix(c, BLACK, 0.55) });
       }
-      for (let i = 0; i < Math.round(140 * k); i++) {         // fine chips
+      for (let i = 0; i < Math.round(220 * k); i++) {         // fine chips
         const { x, y, dx, dy } = piece(1);
         const r = Math.random();
         const c = r < 0.12 ? WHITE : r < 0.35 ? p.light : r < 0.7 ? p.wall : p.stripe;
-        debris.push({ kind: "chip", x, y, z, born: t, life: 1200, rot: 0, spin: 0, size: 0.03,
+        debris.push({ kind: "chip", x, y, z, born: t, life: 1200, rot: 0, spin: 0, size: 0.022,
                       vx: dx * (1 + Math.random() * 3), vy: dy * (1 + Math.random() * 3) - Math.random() * 0.5,
                       vz: -(0.8 + Math.random() * 3.2), c, edge: c });
       }
-      for (let i = 0; i < Math.round(26 * k); i++) {          // dust puffs that hang and fade
+      for (let i = 0; i < Math.round(36 * k); i++) {          // dust puffs that hang and fade
         const { x, y, dx, dy } = piece(0.6);
-        debris.push({ kind: "dust", x, y, z, born: t, life: 650 + Math.random() * 350, rot: 0, spin: 0,
-                      size: 0.14 + Math.random() * 0.2, vx: dx * 0.7, vy: dy * 0.7 - 0.15, vz: -(0.2 + Math.random() * 0.8),
+        debris.push({ kind: "dust", x, y, z, born: t, life: 650 + Math.random() * 450, rot: 0, spin: 0,
+                      size: 0.14 + Math.random() * 0.22, vx: dx * 0.7, vy: dy * 0.7 - 0.15, vz: -(0.2 + Math.random() * 0.8),
                       c: mix(DUST, p.wall, 0.35), edge: DUST });
       }
       const bx = CX, by = VY + BALL_Y * (F0 / LEAD);         // where the ball is on screen at impact
-      for (let i = 0; i < Math.round(30 * k); i++) {          // sparks flying off the point of impact
+      for (let i = 0; i < Math.round(48 * k); i++) {          // sparks flying off the point of impact
         const a = Math.random() * Math.PI * 2;
-        const v = (70 + Math.random() * 150) * PX * k;
-        sparks.push({ x: bx, y: by, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8, born: t, life: 140 + Math.random() * 160,
-                      c: css(Math.random() < 0.5 ? WHITE : p.light) });
+        const v = (70 + Math.random() * 170) * PX * k;
+        sparks.push({ x: bx, y: by, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8, born: t, life: 140 + Math.random() * 200,
+                      c: css(Math.random() < 0.5 ? WHITE : mix(p.light, WHITE, 0.3)) });
       }
       smashes.push({ gate, at: t });
     };
 
     const ballZ = (t: number) => (t <= tl.landAt ? depthAt(tl, t) * GAP : tl.tier * GAP + (t - tl.landAt) * 0.012);
-    const camZ = (t: number) => {
-      if (t <= tl.landAt) return depthAt(tl, t) * GAP - LEAD;
-      const u = Math.min(1, (t - tl.landAt) / SETTLE_MS);
-      return tl.tier * GAP - LEAD + 1.2 * (1 - (1 - u) * (1 - u));
-    };
-
-    const rect = (z: number, cam: number) => {
-      const s = F / (z - cam);
-      return { s, x: Math.round(CX - HW * s), y: Math.round(VY - HH * s), w: Math.round(2 * HW * s), h: Math.round(2 * HH * s) };
-    };
+    const camZ = (t: number) => (t <= tl.landAt ? depthAt(tl, t) * GAP - LEAD : settleCam(tl.tier, (t - tl.landAt) / SETTLE_MS));
 
     const line = (x0: number, y0: number, x1: number, y1: number) => {
       const n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
       for (let i = 0; i <= n; i++) ctx.fillRect(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 1, 1);
     };
 
-    const brickAt = (lx: number, ly: number, bh: number) => {                  // mortar on a wall, in wall pixels
-      const row = Math.floor(ly / bh);
-      const yIn = ly - row * bh;
-      const xIn = (lx + (row % 2 ? bh : 0)) % (bh * 2);
-      return yIn < 1 || xIn < 1;
+    /** Write a colour into the buffer, quantised to 20-level steps with ordered dithering (the pixel-art look). */
+    const put = (i: number, x: number, y: number, r: number, g: number, b: number) => {
+      const d = BAYER[((y & 3) << 2) | (x & 3)];
+      const q = (v: number) => Math.max(0, Math.min(255, Math.floor(v / 20 + d) * 20));
+      buf[i] = 0xff000000 | (q(b) << 16) | (q(g) << 8) | q(r);
     };
 
-    const drawWall = (gate: number, cam: number, t: number) => {
-      const r = rect(gate * GAP, cam);
-      const p = PALETTE[gate];
-      const fog = Math.min(0.85, (gate * GAP - cam) / VIEW);
-      ctx.fillStyle = css(mix(p.wall, BLACK, fog));
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      const rows = Math.max(4, Math.round(r.h / Math.max(1, r.w / 10)));
-      const bh = r.h / rows;
-      ctx.fillStyle = css(mix(p.stripe, BLACK, fog));
-      for (let i = 1; i < rows; i++) ctx.fillRect(r.x, Math.round(r.y + i * bh), r.w, 1);       // mortar lines
-      for (let i = 0; i < rows; i++) {
-        const off = i % 2 ? bh : 0;
-        for (let x = r.x + off; x < r.x + r.w; x += bh * 2) ctx.fillRect(Math.round(x), Math.round(r.y + i * bh), 1, Math.ceil(bh));
+    /** The tunnel itself: walls, ceiling and floor, one ray per pixel (the same maths as castTunnel), up to `limit`. */
+    const drawTunnel = (cam: number, limit: number) => {
+      const open = smashed >= tl.tier;
+      const lit = open ? PALETTE[tl.tier] : null;
+      for (let y = 0; y < H; y++) {
+        const ry = (y + 0.5 - VY) / F;
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          const rx = (x + 0.5 - CX) / F;
+          const ts = rx !== 0 ? HW / Math.abs(rx) : Infinity;
+          const tf = ry !== 0 ? HH / Math.abs(ry) : Infinity;
+          const t = Math.min(ts, tf);
+          if (t > limit) { buf[i] = 0xff000000; continue; }
+          const z = cam + t;
+          const zf = fract(z);
+          const beyond = z > tl.tier * GAP;                       // the stretch after the last gate: the walkout light
+          const seg = Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9)));
+          const p = beyond ? PALETTE[tl.tier] : PALETTE[seg];
+          let c: Rgb;
+          let light: number;
+          let glow = false;
+          if (ts < tf) {                                           // a side wall; u runs -1 (top) .. 1 (bottom)
+            const u = (ry * ts) / HH;
+            const fpz = (t * t) / (HW * F);                        // metres of depth per pixel across the wall
+            const fpu = t / (F * HH);
+            const ribD = Math.abs(fract(z / 0.75 + 0.5) - 0.5) * 0.75;
+            const seamD = Math.abs(fract(z / 1.5 + 0.5) - 0.5) * 1.5;
+            const frameD = Math.abs(z - Math.round(z / GAP) * GAP);
+            if (frameD < Math.max(0.06, 0.6 * fpz) && z > 0.5) c = mix(p.light, STEEL, 0.55);          // the door frame of a gate
+            else if (ribD < Math.max(0.035, 0.55 * fpz)) {
+              c = ribD < Math.max(0.012, 0.25 * fpz) ? mix(STEEL, WHITE, 0.25) : STEEL;                    // steel rib, lit edge
+              if (u < -0.72 && u > -0.86) { c = mix(p.light, WHITE, 0.5); glow = true; }                // a lamp on the rib
+            } else if (u > 0.5) c = mix(p.wall, BLACK, 0.12);                                           // painted lower band
+            else if (u > 0.42) c = mix(p.light, BLACK, 0.25);                                           // its trim
+            else if (seamD < Math.max(0.018, 0.4 * fpz) || Math.abs(u + 0.15) < Math.max(0.015, 0.6 * fpu)) c = mix(CONCRETE, BLACK, 0.4);
+            else c = mix(CONCRETE, p.wall, 0.18 + 0.06 * hash2(Math.floor(z / 1.5), u < -0.15 ? 1 : 2));
+            light = 0.42 + 0.58 * Math.exp(-((zf - 0.3) ** 2) / 0.03) * (0.6 - 0.4 * u);
+          } else if (ry < 0) {                                     // ceiling: a strip light down the middle
+            const u = (rx * tf) / HW;
+            const fp = t / F;
+            if (Math.abs(u) < Math.max(0.15, fp) && zf < 0.55) { c = mix(p.light, WHITE, 0.55); glow = true; }
+            else if (Math.abs(u) < 0.22) c = mix(STEEL, BLACK, 0.45);
+            else if (Math.abs(Math.abs(u) - 0.63) < Math.max(0.025, 0.6 * fp)) c = mix(CEILING, BLACK, 0.4);
+            else c = CEILING;
+            light = 0.55 + 0.3 * Math.exp(-((zf - 0.3) ** 2) / 0.05);
+          } else {                                                 // floor: a guide line, gutters, light pools
+            const u = (rx * tf) / HW;
+            const fp = t / F;
+            if (Math.abs(u) < Math.max(0.03, 0.6 * fp)) c = GUIDE;
+            else if (Math.abs(u) > 0.9) c = mix(FLOOR, BLACK, 0.45);
+            else c = mix(FLOOR, p.stripe, 0.35);
+            light = 0.38 + 0.62 * Math.exp(-((zf - 0.3) ** 2) / 0.04) * (1 - 0.5 * Math.abs(u));
+            if (Math.abs(u) < 0.2 && zf < 0.55) light += 0.15;                               // the strip light's reflection
+          }
+          const fog = Math.max(0, Math.min(1, 1.05 - t / VIEW)) ** 1.3;
+          let k = glow ? Math.max(fog, 0.5) * 1.15 : light * fog;
+          if (beyond && lit) {                                     // warm walkout light pouring in from the stadium
+            c = mix(c, lit.light, 0.35);
+            k = Math.min(1.35, k * 1.25 + 0.15);
+          }
+          put(i, x, y, c[0] * k, c[1] * k, c[2] * k);
+        }
       }
-      ctx.strokeStyle = css(mix(p.light, BLACK, fog));
-      ctx.lineWidth = 1;
-      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    };
+
+    /** A gate's surface at wall coordinates (lx, ly): bricks, a steel frame with rivets, hazard stripes along the
+     *  bottom. `s` is pixels per wall unit (for line widths that never vanish in the distance). */
+    const gateColor = (gate: number, lx: number, ly: number, s: number): Rgb => {
+      const p = PALETTE[gate];
+      const px1 = 1 / s;
+      const ax = Math.abs(lx), ay = Math.abs(ly);
+      if (ax > HW * 0.9 || ay > HH * 0.88) {                                         // frame
+        const fx = HW * 0.9, fy = HH * 0.88;
+        const along = ax > fx ? ly : lx;
+        const rivet = Math.abs(fract(along / 0.16) - 0.5) < Math.max(0.12, px1 / 0.16) &&
+                      Math.abs((ax > fx ? ax - (fx + HW) / 2 : ay - (fy + HH) / 2)) < Math.max(0.018, px1);
+        const base = mix(STEEL, p.light, 0.25);
+        return rivet ? mix(base, WHITE, 0.55) : (ax > HW * 0.97 || ay > HH * 0.975) ? mix(base, BLACK, 0.45) : base;
+      }
+      if (ly > HH * 0.62) {                                                           // hazard stripes
+        const stripe = Math.floor((lx - ly) / 0.14) % 2 === 0;
+        return stripe ? mix(p.light, WHITE, 0.15) : [22, 22, 28];
+      }
+      const bh = 0.11, bw = 0.26;
+      const row = Math.floor((ly + HH) / bh);
+      const yIn = (ly + HH) - row * bh;
+      const shifted = lx + HW + (row % 2 ? bw / 2 : 0);
+      const col = Math.floor(shifted / bw);
+      const xIn = shifted - col * bw;
+      const mortar = Math.max(0.012, 0.6 * px1);
+      if (yIn < mortar || xIn < mortar) return mix(p.stripe, BLACK, 0.35);
+      const v = 0.82 + 0.3 * hash2(row, col);
+      const c = mix(p.wall, BLACK, 1 - Math.min(1, v));
+      return yIn < mortar + Math.max(0.012, px1) ? mix(c, p.light, 0.3) : c;            // bevel catching the light
+    };
+
+    /** Draw a gate (intact, or smashed with a jagged hole opening from the impact point) into the buffer. */
+    const drawGate = (gate: number, z: number, cam: number, hole: number) => {
+      const d = z - cam;
+      if (d < 0.06) return;
+      const s = F / d;
+      const x0 = Math.max(0, Math.floor(CX - HW * s)), x1 = Math.min(W, Math.ceil(CX + HW * s));
+      const y0 = Math.max(0, Math.floor(VY - HH * s)), y1 = Math.min(H, Math.ceil(VY + HH * s));
+      const fog = Math.max(0, Math.min(1, 1.05 - d / VIEW)) ** 1.3;
+      const jag = jags[gate];
+      const p = PALETTE[gate];
+      for (let y = y0; y < y1; y++) {
+        const ly = (y + 0.5 - VY) / s;
+        const lightY = 0.68 + 0.32 * (1 - (ly + HH) / (2 * HH));
+        for (let x = x0; x < x1; x++) {
+          const lx = (x + 0.5 - CX) / s;
+          if (hole > 0) {
+            const wx = lx, wy = ly - BALL_Y;
+            const a = Math.atan2(wy, wx);
+            const edge = hole * jag[Math.floor(((a + Math.PI) / (Math.PI * 2)) * jag.length) % jag.length];
+            const dd = Math.hypot(wx, wy);
+            if (dd < edge) continue;                                                   // the hole
+            if (dd < edge + Math.max(0.03, 1.2 / s)) {
+              const rim = mix(p.light, WHITE, 0.35);
+              put(y * W + x, x, y, rim[0] * fog, rim[1] * fog, rim[2] * fog);
+              continue;
+            }
+          }
+          const c = gateColor(gate, lx, ly, s);
+          const k = lightY * fog;
+          put(y * W + x, x, y, c[0] * k, c[1] * k, c[2] * k);
+        }
+      }
+    };
+
+    /** The opening at the end of the walkout: the stadium (the site's own scene), overexposed at first. */
+    const drawStadium = (cam: number, t: number) => {
+      const d = exitZ - cam;
+      if (d < 0.05) return;
+      const s = F / d;
+      const rx0 = CX - HW * s, ry0 = VY - HH * s, rw = 2 * HW * s, rh = 2 * HH * s;
+      const x0 = Math.max(0, Math.floor(rx0)), x1 = Math.min(W, Math.ceil(rx0 + rw));
+      const y0 = Math.max(0, Math.floor(ry0)), y1 = Math.min(H, Math.ceil(ry0 + rh));
+      const u = Math.max(0, Math.min(1, (t - tl.landAt) / SETTLE_MS));
+      const expose = 0.92 * (1 - u) ** 1.6;                         // white-out at first, the stadium as we come out
+      const light = mix(PALETTE[tl.tier].light, WHITE, 0.6);
+      const st = stadium;
+      let k = 1, fx = 0, fy = 0;
+      if (st) {
+        const [vx, vy, vw, vh] = st.meta.view;
+        k = Math.max(rw / vw, rh / vh);
+        fx = vx + vw * st.meta.focus[0] - rw / k / 2;
+        fy = vy + vh * st.meta.focus[1] - rh / k / 2;
+      }
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          let r = light[0], g = light[1], b = light[2];
+          if (st) {
+            const sx = Math.min(st.meta.w - 1, Math.max(0, Math.floor(fx + (x + 0.5 - rx0) / k)));
+            const sy = Math.min(st.meta.h - 1, Math.max(0, Math.floor(fy + (y + 0.5 - ry0) / k)));
+            const v = st.px[sy * st.meta.w + sx];
+            r = (v & 0xff) + ((light[0] - (v & 0xff)) * expose);
+            g = ((v >> 8) & 0xff) + ((light[1] - ((v >> 8) & 0xff)) * expose);
+            b = ((v >> 16) & 0xff) + ((light[2] - ((v >> 16) & 0xff)) * expose);
+          }
+          buf[y * W + x] = 0xff000000 | (Math.round(b) << 16) | (Math.round(g) << 8) | Math.round(r);
+        }
+      }
+    };
+
+    const drawGateDecor = (gate: number, cam: number, t: number) => {
+      const d = gate * GAP - cam;
+      const s = F / d;
+      const fog = Math.max(0, Math.min(1, 1.05 - d / VIEW));
+      const p = PALETTE[gate];
       const icon = icons[gate - 1];
       if (icon.complete && icon.naturalWidth) {
-        const size = Math.max(4, Math.round(Math.min(r.w, r.h) * 0.55));
-        ctx.globalAlpha = 1 - fog;
-        ctx.drawImage(icon, Math.round(CX - size / 2), Math.round(VY - size / 2), size, size);
+        const size = Math.max(4, Math.round(Math.min(HW, HH) * s * 0.9));
+        ctx.globalAlpha = fog;
+        ctx.drawImage(icon, Math.round(CX - size / 2), Math.round(VY - HH * 0.18 * s - size / 2), size, size);
         ctx.globalAlpha = 1;
       }
       const near = gate * GAP - ballZ(t);                     // cracks spread as the ball closes in
       if (near < CRACK_RANGE) {
         const grow = Math.pow(1 - Math.max(0, near) / CRACK_RANGE, 1.4);
-        const ix = CX, iy = VY + BALL_Y * r.s;
+        const ix = CX, iy = VY + BALL_Y * s;
         const dark = p.wall[0] + p.wall[1] + p.wall[2] < 120;                   // on a black gate the cracks glow instead
-        ctx.fillStyle = css(mix(dark ? p.light : mix(p.stripe, BLACK, 0.65), BLACK, fog));
+        ctx.fillStyle = css(mix(dark ? p.light : mix(p.stripe, BLACK, 0.7), BLACK, 1 - fog));
         for (const crack of cracks[gate]) {
           const n = (crack.length - 1) * grow;
           for (let k = 0; k < Math.floor(n); k++)
-            line(ix + crack[k][0] * r.s, iy + crack[k][1] * r.s, ix + crack[k + 1][0] * r.s, iy + crack[k + 1][1] * r.s);
+            line(ix + crack[k][0] * s, iy + crack[k][1] * s, ix + crack[k + 1][0] * s, iy + crack[k + 1][1] * s);
         }
-        if (grow > 0.6) {                                    // the gate starts to give: light leaks through the cracks
-          ctx.fillStyle = css(p.light, (grow - 0.6) * 2);
+        if (grow > 0.55) {                                    // the gate starts to give: light leaks through the cracks
+          ctx.fillStyle = css(mix(p.light, WHITE, 0.4), Math.min(1, (grow - 0.55) * 2.2));
           for (const crack of cracks[gate]) {
-            const [cx, cy] = crack[Math.min(crack.length - 1, Math.floor((crack.length - 1) * grow))];
-            ctx.fillRect(Math.round(ix + cx * r.s), Math.round(iy + cy * r.s), 1, 1);
+            for (let k = 1; k < Math.floor((crack.length - 1) * grow); k += 2) {
+              const [cx, cy] = crack[k];
+              ctx.fillRect(Math.round(ix + cx * s), Math.round(iy + cy * s), 1, 1);
+            }
           }
-        }
-      }
-    };
-
-    /** A smashed gate still ahead of the camera: the wall with a jagged hole blowing open from the impact point. */
-    const drawBrokenWall = (sm: Smash, cam: number, t: number) => {
-      const z = sm.gate * GAP;
-      if (z - cam < 0.06) return;
-      const r = rect(z, cam);
-      const p = PALETTE[sm.gate];
-      const u = Math.min(1, (t - sm.at) / HOLE_MS);
-      const radius = (0.3 + 1.9 * (1 - (1 - u) * (1 - u))) * HW;
-      const jag = jags[sm.gate];
-      const rows = Math.max(4, Math.round(r.h / Math.max(1, r.w / 10)));
-      const bh = Math.max(1, r.h / rows);
-      const wall = css(p.wall), mortar = css(p.stripe), rim = css(mix(p.light, WHITE, 0.3));
-      const x0 = Math.max(0, r.x), x1 = Math.min(W, r.x + r.w), y0 = Math.max(0, r.y), y1 = Math.min(H, r.y + r.h);
-      for (let y = y0; y < y1; y++) {
-        const wy = (y - VY) / r.s - BALL_Y;
-        for (let x = x0; x < x1; x++) {
-          const wx = (x - CX) / r.s;
-          const a = Math.atan2(wy, wx);
-          const edge = radius * jag[Math.floor(((a + Math.PI) / (Math.PI * 2)) * jag.length) % jag.length];
-          const d = Math.hypot(wx, wy);
-          if (d < edge) continue;                                                   // the hole
-          ctx.fillStyle = d < edge + 0.03 ? rim : brickAt(x - r.x, y - r.y, bh) ? mortar : wall;
-          ctx.fillRect(x, y, 1, 1);
         }
       }
     };
@@ -290,6 +450,8 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       const by = VY + BALL_Y * s;
       const spin = t * 0.018;
       const cos = Math.cos(spin), sin = Math.sin(spin);
+      const seg = Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9)));
+      const rim = PALETTE[seg].light;
       for (let py = -Math.ceil(ry); py <= Math.ceil(ry); py++) {
         for (let px = -Math.ceil(rx); px <= Math.ceil(rx); px++) {
           const nx = px / rx, ny = py / ry;
@@ -298,18 +460,41 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
           const nz = Math.sqrt(1 - q);
           const ty = ny * cos - nz * sin, tz = ny * sin + nz * cos;                 // rolls away from us
           const patch = PATCHES.some(([a, b, c]) => a * nx + b * ty + c * tz > 0.88);
-          const shade = 0.45 + 0.55 * nz;
+          const shade = 0.4 + 0.6 * Math.max(0, -0.35 * nx - 0.45 * ny + 0.82 * nz);  // lit from the ceiling
           const base: Rgb = patch ? [26, 28, 40] : [244, 244, 236];
-          ctx.fillStyle = css(nz < 0.22 ? mix(base, [90, 96, 120], 0.6) : mix(BLACK, base, shade));
+          let c = mix(BLACK, base, shade);
+          if (nz < 0.28) c = mix(c, rim, 0.55);                                       // the tunnel's light on its rim
+          if (!patch && (nx + 0.35) ** 2 + (ny + 0.42) ** 2 < 0.05) c = WHITE;         // specular highlight
+          ctx.fillStyle = css(c);
           ctx.fillRect(Math.round(bx + px), Math.round(by + py), 1, 1);
         }
       }
     };
 
+    /** Colour-split flash: the red channel slides one way and blue the other, for a beat after a smash. */
+    const colourSplit = (amount: number) => {
+      const k = Math.round(amount);
+      if (k < 1) return;
+      const img = ctx.getImageData(0, 0, W, H);
+      const d = img.data;
+      const src = new Uint8ClampedArray(d);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          const xr = Math.min(W - 1, x + k), xb = Math.max(0, x - k);
+          d[i] = src[(y * W + xr) * 4];
+          d[i + 2] = src[(y * W + xb) * 4 + 2];
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    };
+
     const frame = (now: number) => {
       if (skipRef.current && !landed) { skipRef.current = false; skipToEnd(now, true); }
+      const frozen = now < freezeUntil;                       // hit-stop: time stands still for a beat
+      if (frozen) t0 += now - last;
       const t = now - t0;
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = frozen ? 0 : Math.min(0.05, (now - last) / 1000);
       last = now;
 
       while (smashed < tl.tier && t >= tl.gates[smashed]) {
@@ -319,7 +504,9 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         lastSmash = { gate: smashed, at: t };
         shake = { amp: 2 + smashed * 0.9 + (final ? 4 : 0), at: t };
         jolt(smashed, final);
-        flash = final ? { amp: 1, at: t, ms: 420 / TEMPO } : { amp: 0.3, at: t, ms: 90 / TEMPO };
+        flash = final ? { amp: 1, at: t, ms: 420 / TEMPO } : { amp: 0.32, at: t, ms: 90 / TEMPO };
+        split = { amp: 1 + power(smashed) + (final ? 1 : 0), at: t };
+        if (!reduce) freezeUntil = now + hitStopMs(smashed, final);
         callbacks.current.onSmash?.(smashed, final);
       }
       if (!landed && t >= tl.landAt + LANDED_DELAY_MS) {
@@ -330,76 +517,64 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       const pu = (t - lastSmash.at) / PUNCH_MS;                                     // camera punch-in on impact
       F = F0 * (1 + (pu >= 0 && pu < 1 ? 0.16 * power(lastSmash.gate || 1) * (1 - pu) * (1 - pu) : 0));
       const cam = camZ(t);
-      const open = smashed >= tl.tier;                     // the last gate is down: the light beyond
-      const wallAt = open ? Infinity : (smashed + 1) * GAP;
-      const s = shake.amp * Math.max(0, 1 - (t - shake.at) / SHAKE_MS);
-      ctx.setTransform(1, 0, 0, 1, Math.round((Math.random() * 2 - 1) * s), Math.round((Math.random() * 2 - 1) * s));
-      ctx.fillStyle = "#000";
-      ctx.fillRect(-8, -8, W + 16, H + 16);
+      const open = smashed >= tl.tier;                     // the last gate is down: the stadium beyond
+      const wallZ = open ? exitZ : (smashed + 1) * GAP;
 
-      // walls: nested slices, near to far, each a band of its segment's colour
-      let z = (Math.floor((cam + 0.05) / STEP) + 1) * STEP;
-      for (; z < Math.min(cam + VIEW, wallAt); z += STEP) {
-        const r = rect(z, cam);
-        const fog = (z - cam) / VIEW;
-        const seg = Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9)));
-        let c: Rgb;
-        if (z > tl.tier * GAP) {
-          const p = PALETTE[tl.tier];                          // the walkout light: brighter further in
-          c = mix(Math.floor(z / STEP) % 2 ? p.light : mix(p.light, p.wall, 0.45), WHITE, Math.min(0.75, fog * 0.7));
-        } else {
-          const p = PALETTE[seg];
-          c = mix(Math.floor(z / STEP) % 2 ? p.wall : p.stripe, BLACK, Math.min(0.9, fog * 1.1));
-        }
-        ctx.fillStyle = css(c);
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        if (Number.isInteger(z) && z % GAP !== 0 && z <= tl.tier * GAP) {          // lamps along the walls
-          ctx.fillStyle = css(mix(PALETTE[seg].light, BLACK, fog));
-          const k = Math.max(1, Math.round(r.s * 0.03));
-          for (const [lx, ly] of [[r.x, r.y], [r.x + r.w - k, r.y], [r.x, r.y + r.h - k], [r.x + r.w - k, r.y + r.h - k]])
-            ctx.fillRect(lx, ly, k, k);
-        }
+      drawTunnel(cam, Math.min(VIEW, wallZ - cam));
+      if (open) drawStadium(cam, t);
+      else drawGate(smashed + 1, wallZ, cam, 0);
+      for (let i = smashes.length - 1; i >= 0; i--) {     // broken gates still ahead, far to near
+        const sm = smashes[i];
+        if (sm.gate * GAP - cam < 0.06 && t - sm.at > RING_MS) { smashes.splice(i, 1); continue; }
+        const u = Math.min(1, (t - sm.at) / HOLE_MS);
+        drawGate(sm.gate, sm.gate * GAP, cam, (0.3 + 1.9 * (1 - (1 - u) * (1 - u))) * HW);
       }
-      if (wallAt !== Infinity) drawWall(smashed + 1, cam, t);
-      else if (z >= cam + VIEW) {
-        const r = rect(cam + VIEW, cam);
-        ctx.fillStyle = css(mix(PALETTE[tl.tier].light, WHITE, 0.8));
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-      }
+
+      const s = shake.amp * Math.max(0, 1 - (t - shake.at) / SHAKE_MS);
+      const ox = frozen ? 0 : Math.round((Math.random() * 2 - 1) * s), oy = frozen ? 0 : Math.round((Math.random() * 2 - 1) * s);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.putImageData(image, ox, oy);
+      ctx.setTransform(1, 0, 0, 1, ox, oy);
+
+      if (!open) drawGateDecor(smashed + 1, cam, t);
 
       if (open) {                                          // light rays turning slowly round the vanishing point
-        const img = ctx.getImageData(0, 0, W, H);
-        const rot = t * 0.0004;
-        const glow = Math.min(1, (t - tl.landAt) / 500);
-        for (let y = 0; y < H; y++) {
-          for (let x = 0; x < W; x++) {
-            const a = Math.atan2(y - VY, x - CX) + rot;
-            if (Math.floor((a + Math.PI * 2) / (Math.PI / 8)) % 2) continue;
-            const i = (y * W + x) * 4;
-            const k = 0.22 * glow * Math.max(0, 1 - Math.hypot((x - CX) / CX, (y - VY) / VY) / 1.2);
-            img.data[i] += (255 - img.data[i]) * k;
-            img.data[i + 1] += (255 - img.data[i + 1]) * k;
-            img.data[i + 2] += (255 - img.data[i + 2]) * k;
+        const glow = Math.min(1, (t - tl.landAt) / 500) * Math.max(0, 1 - (t - tl.landAt) / (SETTLE_MS * 1.6));
+        if (glow > 0.01) {
+          ctx.globalCompositeOperation = "lighter";
+          const rot = t * 0.0004;
+          const R = Math.hypot(W, H);
+          for (let k = 0; k < 16; k += 2) {
+            const a0 = (k / 16) * Math.PI * 2 - rot, a1 = a0 + Math.PI / 16;
+            ctx.fillStyle = css(mix(PALETTE[tl.tier].light, WHITE, 0.5), 0.1 * glow);
+            ctx.beginPath(); ctx.moveTo(CX, VY);
+            ctx.lineTo(CX + Math.cos(a0) * R, VY + Math.sin(a0) * R); ctx.lineTo(CX + Math.cos(a1) * R, VY + Math.sin(a1) * R);
+            ctx.closePath(); ctx.fill();
           }
+          ctx.globalCompositeOperation = "source-over";
         }
-        ctx.putImageData(img, 0, 0);
       }
 
       const bz = ballZ(t);
-      if (bz < cam + VIEW && bz <= wallAt) drawBall(bz, cam, t);
+      if (bz < cam + VIEW && bz <= wallZ + (open ? 30 : 0)) drawBall(bz, cam, t);
 
-      for (let i = smashes.length - 1; i >= 0; i--) {     // broken gates still ahead, and their shockwave rings
-        const sm = smashes[i];
-        if (sm.gate * GAP - cam < 0.06 && t - sm.at > RING_MS) { smashes.splice(i, 1); continue; }
-        drawBrokenWall(sm, cam, t);
+      for (const sm of smashes) {                         // shockwave rings, two of them, the second thinner
         const u = (t - sm.at) / RING_MS;
-        if (u < 1 && sm.gate * GAP - cam > 0.06) {
-          const r = rect(sm.gate * GAP, cam);
-          const f = 0.35 + 1.3 * u;
-          const hw = HW * f * r.s, hh = HH * f * r.s, cy = VY + BALL_Y * r.s;
-          ctx.strokeStyle = css(mix(PALETTE[sm.gate].light, WHITE, 0.4), 1 - u);
-          ctx.lineWidth = 2;
-          ctx.strokeRect(Math.round(CX - hw) + 0.5, Math.round(cy - hh) + 0.5, Math.round(hw * 2), Math.round(hh * 2));
+        const d = sm.gate * GAP - cam;
+        if (u >= 1 || d <= 0.06) continue;
+        const sc = F / d;
+        const cy = VY + BALL_Y * sc;
+        for (const [lag, wdt] of [[0, 2], [0.18, 1]] as const) {
+          const v = u - lag;
+          if (v <= 0) continue;
+          const f = 0.3 + 1.5 * v;
+          ctx.strokeStyle = css(mix(PALETTE[sm.gate].light, WHITE, 0.45), Math.max(0, 1 - v));
+          ctx.lineWidth = wdt;
+          ctx.beginPath();
+          ctx.ellipse(CX, cy, HW * f * sc, HH * f * sc * 0.92, 0, 0, Math.PI * 2);
+          ctx.stroke();
         }
       }
 
@@ -410,25 +585,32 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         if (p.kind === "dust") { p.vx *= 0.96; p.vy *= 0.96; p.size += 0.25 * dt; }
         const d = p.z - cam;
         const age = t - p.born;
-        if (d < 0.04 || age > p.life) { debris.splice(i, 1); continue; }
+        if (d < (p.kind === "dust" ? 0.06 : 0.32) || age > p.life) { debris.splice(i, 1); continue; }   // gone past the lens
         const sc = F / d;
         const sx = CX + p.x * sc, sy = VY + p.y * sc;
         if (p.kind === "chip") {
           ctx.fillStyle = css(p.c);
-          ctx.fillRect(Math.round(sx), Math.round(sy), Math.max(1, Math.round(p.size * sc)), Math.max(1, Math.round(p.size * sc)));
+          const sz = Math.max(1, Math.min(3, Math.round(p.size * sc)));
+          ctx.fillRect(Math.round(sx), Math.round(sy), sz, sz);
         } else if (p.kind === "dust") {
-          const sz = Math.max(1, Math.round(p.size * sc));
-          ctx.fillStyle = css(p.c, 0.45 * (1 - age / p.life));
-          ctx.fillRect(Math.round(sx - sz / 2), Math.round(sy - sz / 2), sz, sz);
+          const r = Math.max(1, Math.min(W * 0.07, p.size * sc * 0.5));                  // a soft round puff
+          const fade = 1 - age / p.life;
+          ctx.fillStyle = css(p.c, 0.16 * fade);
+          ctx.beginPath(); ctx.arc(Math.round(sx), Math.round(sy), r, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = css(mix(p.c, WHITE, 0.2), 0.14 * fade);
+          ctx.beginPath(); ctx.arc(Math.round(sx), Math.round(sy), r * 0.55, 0, Math.PI * 2); ctx.fill();
         } else {                                                                     // a tumbling brick: it flips as it spins
-          const w = Math.max(1, Math.round(p.size * sc * (0.35 + 0.65 * Math.abs(Math.cos(p.rot)))));
-          const h = Math.max(1, Math.round(p.size * sc * 0.55 * (0.35 + 0.65 * Math.abs(Math.sin(p.rot)))));
+          const cap = W * 0.07;                                                        // never a flat slab across the screen
+          const w = Math.max(1, Math.round(Math.min(cap, p.size * sc * (0.35 + 0.65 * Math.abs(Math.cos(p.rot))))));
+          const h = Math.max(1, Math.round(Math.min(cap * 0.6, p.size * sc * 0.55 * (0.35 + 0.65 * Math.abs(Math.sin(p.rot))))));
           const x0 = Math.round(sx - w / 2), y0 = Math.round(sy - h / 2);
           ctx.fillStyle = css(p.edge);
           ctx.fillRect(x0, y0, w, h);
           if (w > 2 && h > 2) {
             ctx.fillStyle = css(p.c);
             ctx.fillRect(x0, y0, w - 1, h - 1);
+            ctx.fillStyle = css(mix(p.c, WHITE, 0.35));                             // its lit top edge
+            ctx.fillRect(x0, y0, w - 1, 1);
           }
         }
       }
@@ -443,13 +625,14 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         line(x0, y0, x1, y1);
       }
 
-      if (!open) {                                         // speed lines, more of them the faster we go
+      if (!open) {                                         // speed lines, more of them the faster we go, in the tunnel's light
         const speed = (depthAt(tl, t + 16) - depthAt(tl, t)) * GAP;
-        const n = Math.round(speed * 60);
-        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        const n = frozen ? 0 : Math.round(speed * 70);
+        const seg = Math.min(7, Math.max(1, Math.ceil(cam / GAP + 1e-9)));
+        ctx.fillStyle = css(mix(PALETTE[seg].light, WHITE, 0.6), 0.4);
         for (let i = 0; i < n; i++) {
           const a = Math.random() * Math.PI * 2;
-          const r0 = (0.5 + Math.random() * 0.5) * CX, len = (0.04 + Math.random() * 0.09) * W;
+          const r0 = (0.5 + Math.random() * 0.5) * CX, len = (0.04 + Math.random() * 0.1) * W;
           for (let k = 0; k < len; k += 1)
             ctx.fillRect(Math.round(CX + Math.cos(a) * (r0 + k)), Math.round(VY + Math.sin(a) * (r0 + k) * (H / W)), 1, 1);
         }
@@ -460,8 +643,11 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         ctx.fillStyle = `rgba(255,255,255,${f})`;
         ctx.fillRect(-8, -8, W + 16, H + 16);
       }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const sv = (t - split.at) / SPLIT_MS;
+      if (!reduce && sv >= 0 && sv < 1) colourSplit(split.amp * (1 - sv));
 
-      if (t < tl.landAt + STOP_AFTER_MS || debris.length || sparks.length) raf = requestAnimationFrame(frame);
+      if (t < tl.landAt + Math.max(STOP_AFTER_MS, SETTLE_MS + 200) || debris.length || sparks.length) raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => {
