@@ -395,7 +395,7 @@ test('niche-o-meter: the intro pops up only the very first time, and a reload ne
  await expect(page.getByRole('heading',{name:'Niche-o-meter'})).toBeVisible();
  await page.waitForTimeout(800);
  await expect(page.getByRole('dialog')).toHaveCount(0);
- await page.goto('/');await page.getByRole('link',{name:'NICHE-O-METER'}).click();            // another visit, same browser
+ await page.goto('/');await page.getByRole('link',{name:'NICHE-O-METER',exact:true}).click();   // another visit, same browser (the button, not the header link)
  await expect(page).toHaveURL(/\/niche$/);
  await page.waitForTimeout(800);
  await expect(page.getByRole('dialog')).toHaveCount(0);

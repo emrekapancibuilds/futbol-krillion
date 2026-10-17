@@ -1,20 +1,26 @@
 "use client";
 
-// The tier reveal, Smash 2.0 (spec: docs/superpowers/specs/2026-10-16-matchday-scene-design.md): a first-person run
-// down a stadium tunnel. A football smashes through one gate per tier, faster at each gate, and the tunnel beyond
-// takes the next tier's colour; after the last gate the camera walks out into the stadium from the site background.
+// The tier reveal, Tunnel 3.0 (specs: docs/superpowers/specs/2026-10-16-matchday-scene-design.md and
+// 2026-10-17-scene-2-design.md): a first-person run down a stadium tunnel. A football smashes through one gate per
+// tier, faster at each gate, and the tunnel beyond takes the next tier's colour; after the last gate the camera walks
+// out into the stadium from the site background.
 //
-// The tunnel is ray-cast per pixel into an image buffer (concrete panels, steel ribs, a strip light along the ceiling,
-// light pools on a floor with a guide line), and so are the gates (bricks, a steel frame with rivets, hazard stripes),
-// with ordered dithering so it stays pixel art. Each smash: cracks spread as the ball closes in, then a hit-stop
-// freeze, a camera punch and jolt, the ball squashing, a shockwave, sparks, tumbling bricks and dust, a colour-split
-// flash, and the broken gate with a jagged hole blowing open as we pass. It hits harder the deeper the gate.
-// About 200 canvas pixels on the short side, scaled up crisp by CSS.
+// The tunnel is ray-cast per pixel into an image buffer, sampling weathered surfaces baked when the run starts
+// (lib/reveal/walls.ts: brick where the plaster fell, cracks, stains, grime, puddles and rubble, and jerseys, team
+// photos, posters, scarves, exit signs, extinguishers and a pipe on the walls), with steel ribs (some lamps dead or
+// flickering), a strip light along the ceiling and a guide line on the floor; the gates are bricks in a steel frame
+// with hazard stripes. Ordered dithering keeps it pixel art. A "THIS IS FUTKRILL" sign hangs before the last gate.
+// Each smash: cracks spread as the ball closes in (and, before the last gate, time slows), then a hit-stop freeze, a
+// camera punch and jolt, the ball squashing, a zoom burst, an impact star, a shockwave, sparks, polygon shards,
+// tumbling bricks, dust, crumbs falling from the ceiling, the lights surging and flickering, a tier-tinted flash and a
+// colour split; from gate 5 electric arcs, from 6 embers, and at 7 gold lightning and confetti. It hits harder the
+// deeper the gate. About 200 canvas pixels on the short side, scaled up crisp by CSS.
 
 import { useEffect, useRef } from "react";
 
 import { depthAt, revealTimeline, TEMPO } from "@/lib/reveal/timeline.ts";
-import { EXIT, FOCAL, GAP, hitStopMs, HW, LEAD, settleCam, VIEW } from "@/lib/reveal/tunnel.ts";
+import { bolt, EXIT, FOCAL, GAP, hitStopMs, HW, LEAD, settleCam, slowMo, slowSpan, tierEffects, VIEW } from "@/lib/reveal/tunnel.ts";
+import { buildSurfaces, F_DECAL, F_EMISSIVE, F_PATCH, F_PUDDLE, TPU, type Surface } from "@/lib/reveal/walls.ts";
 import { pickComposition, type SceneMeta } from "@/lib/scene/engine.ts";
 import { TIER_COLORS, TIERS } from "@/lib/tiers.ts";
 
@@ -32,10 +38,18 @@ const SETTLE_MS = 900 / TEMPO;      // the walkout into the stadium after the la
 const LANDED_DELAY_MS = 140;        // the white flash shows before the banner
 const STOP_AFTER_MS = 2600;         // the loop stops this long after landing; the last frame stays
 const SHORT_SIDE = 200;             // canvas pixels on the screen's short side
+const BURST_MS = 170 / TEMPO;       // the zoom burst after a smash
+const STAR_MS = 240 / TEMPO;        // the impact star
+const SURGE_MS = 380 / TEMPO;       // the lights surge, then stutter, after a smash
+const ARC_MS = 520 / TEMPO;         // electric arcs (gate 5 and up)
+const SIGN_TEXT = "THIS IS FUTKRILL";
 
 type Rgb = [number, number, number];
-type Debris = { kind: "brick" | "chip" | "dust"; x: number; y: number; z: number; vx: number; vy: number; vz: number;
-                size: number; rot: number; spin: number; c: Rgb; edge: Rgb; born: number; life: number };
+type Debris = { kind: "brick" | "chip" | "dust" | "shard" | "crumb"; x: number; y: number; z: number; vx: number; vy: number;
+                vz: number; size: number; rot: number; spin: number; c: Rgb; edge: Rgb; born: number; life: number;
+                shape?: [number, number][] };
+type Mote = { kind: "ember" | "confetti"; x: number; y: number; vx: number; vy: number; c: Rgb; born: number; life: number; ph: number };
+type Bolt = { pts: [number, number][]; born: number; life: number; c: Rgb; glow: Rgb };
 type Spark = { x: number; y: number; vx: number; vy: number; c: string; born: number; life: number };
 type Smash = { gate: number; at: number };
 
@@ -47,9 +61,11 @@ const WHITE: Rgb = [255, 255, 255];
 const DUST: Rgb = [150, 140, 128];
 const CONCRETE: Rgb = [62, 68, 90];
 const STEEL: Rgb = [118, 126, 150];
-const CEILING: Rgb = [20, 22, 32];
 const FLOOR: Rgb = [38, 40, 54];
 const GUIDE: Rgb = [206, 212, 222];
+const RUST: Rgb = [122, 66, 32];
+const GOLD: Rgb = [255, 206, 72];
+const CONFETTI: Rgb[] = [GOLD, WHITE, [255, 236, 160], [214, 150, 40]];
 const PALETTE = Object.fromEntries(Object.entries(TIER_COLORS).map(([k, v]) => [k, {
   wall: hex(v.wall), stripe: hex(v.stripe), light: hex(v.light),
 }])) as Record<number, { wall: Rgb; stripe: Rgb; light: Rgb }>;
@@ -69,6 +85,50 @@ const PATCHES = [[0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI], [1, PHI
   const n = Math.hypot(x, y, z);
   return [x / n, y / n, z / n];
 });
+
+// 3x5 letters for the "THIS IS FUTKRILL" sign.
+const GLYPHS: Record<string, string[]> = {
+  T: ["###", ".#.", ".#.", ".#.", ".#."], H: ["#.#", "#.#", "###", "#.#", "#.#"], I: ["###", ".#.", ".#.", ".#.", "###"],
+  S: ["###", "#..", "###", "..#", "###"], F: ["###", "#..", "##.", "#..", "#.."], U: ["#.#", "#.#", "#.#", "#.#", "###"],
+  K: ["#.#", "#.#", "##.", "#.#", "#.#"], R: ["##.", "#.#", "##.", "#.#", "#.#"], L: ["#..", "#..", "#..", "#..", "###"],
+  " ": ["...", "...", "...", "...", "..."],
+};
+
+/** The sign over the tunnel before the last gate: white pixel letters on navy, in a gold frame. */
+function makeSign(): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = SIGN_TEXT.length * 4 + 7;
+  c.height = 13;
+  const g = c.getContext("2d");
+  if (!g) return c;
+  g.fillStyle = "#7a5a10"; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = "#ffce48"; g.fillRect(1, 1, c.width - 2, c.height - 2);
+  g.fillStyle = "#101530"; g.fillRect(2, 2, c.width - 4, c.height - 4);
+  [...SIGN_TEXT].forEach((ch, k) => {
+    const glyph = (GLYPHS[ch] ?? GLYPHS[" "]).join("");
+    for (let i = 0; i < 15; i++) {
+      if (glyph[i] !== "#") continue;
+      const x = 4 + k * 4 + (i % 3), y = 4 + Math.floor(i / 3);
+      g.fillStyle = "#7a5a10"; g.fillRect(x, y + 1, 1, 1);
+      g.fillStyle = "#ffffff"; g.fillRect(x, y, 1, 1);
+    }
+  });
+  return c;
+}
+
+/** Fill a triangle with whole pixels, row by row (crisp, unlike a canvas path). */
+function fillTri(ctx: CanvasRenderingContext2D, p: [number, number][]) {
+  const [a, b, c] = [...p].sort((u, v) => u[1] - v[1]);
+  const edge = (p0: [number, number], p1: [number, number], y: number) =>
+    p1[1] === p0[1] ? p0[0] : p0[0] + ((p1[0] - p0[0]) * (y - p0[1])) / (p1[1] - p0[1]);
+  const y0 = Math.max(0, Math.ceil(a[1])), y1 = Math.min(ctx.canvas.height, Math.floor(c[1]));   // only rows on the canvas
+  for (let y = y0; y <= y1; y++) {
+    const xa = edge(a, c, y);
+    const xb = y < b[1] ? edge(a, b, y) : edge(b, c, y);
+    const x0 = Math.round(Math.min(xa, xb)), x1 = Math.round(Math.max(xa, xb));
+    ctx.fillRect(x0, y, Math.max(1, x1 - x0), 1);
+  }
+}
 
 /** Spider cracks for one gate, in wall units from the impact point: a few jagged lines, each a list of points. */
 function makeCracks(): [number, number][][] {
@@ -131,6 +191,12 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     const PX = W / 160;                                 // screen-space speeds scale with the canvas
     const tl = revealTimeline(tier);
     const exitZ = tl.tier * GAP + EXIT;
+    const segOf = (z: number) => (z > tl.tier * GAP ? tl.tier : Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9))));
+    const surf = buildSurfaces({ length: exitZ + 0.6, hh: HH, gap: GAP, palette: (z) => PALETTE[segOf(z)] });
+    const sign = makeSign();
+    const signZ = tl.tier * GAP - 0.55;                  // hung from the ceiling just before the last gate
+    const finalAt = tl.gates[tl.tier - 1];
+    const slowFor = slowSpan(tl);                        // timeline ms that run slow before the last gate
     const icons = TIERS.map((t) => Object.assign(new Image(), { src: t.icon }));
     const cracks = Array.from({ length: 8 }, makeCracks);
     const jags = Array.from({ length: 8 }, () => Array.from({ length: 22 }, () => 0.7 + Math.random() * 0.6));
@@ -148,12 +214,18 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     let F = F0;
     let freezeUntil = 0;
     let shake = { amp: 0, at: 0 };
-    let flash = { amp: 0, at: 0, ms: 120 };
+    let flash = { amp: 0, at: 0, ms: 120, c: WHITE };
     let split = { amp: 0, at: -1e9 };
     let lastSmash: Smash = { gate: 0, at: -1e9 };
+    let surge = { amp: 0, at: -1e9 };
+    let arcs = { amt: 0, at: -1e9, gate: 1 };
+    let burst = { amt: 0, at: -1e9 };
+    let star = { amt: 0, at: -1e9, c: WHITE };
     const debris: Debris[] = [];
     const sparks: Spark[] = [];
     const smashes: Smash[] = [];
+    const motes: Mote[] = [];
+    const bolts: Bolt[] = [];
 
     const skipToEnd = (now: number, withFlash: boolean) => {
       t0 = now - (tl.landAt + SETTLE_MS);
@@ -161,8 +233,10 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       debris.length = 0;
       sparks.length = 0;
       smashes.length = 0;
+      motes.length = 0;
+      bolts.length = 0;
       freezeUntil = 0;
-      flash = { amp: withFlash ? 1 : 0, at: tl.landAt + SETTLE_MS, ms: 300 };
+      flash = { amp: withFlash ? 1 : 0, at: tl.landAt + SETTLE_MS, ms: 300, c: WHITE };
     };
     if (reduce) skipToEnd(t0, false);
     const onKey = (e: KeyboardEvent) => { if (!landed && (e.key === "Enter" || e.key === " ")) skipRef.current = true; };
@@ -221,6 +295,50 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         sparks.push({ x: bx, y: by, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8, born: t, life: 140 + Math.random() * 200,
                       c: css(Math.random() < 0.5 ? WHITE : mix(p.light, WHITE, 0.3)) });
       }
+      const fx = tierEffects(gate, gate === tl.tier);
+      for (let i = 0; i < fx.shards; i++) {                    // angular shards of the gate, spinning out
+        const { x, y, dx, dy } = piece(0.6);
+        const r = Math.random();
+        const c = r < 0.5 ? p.wall : r < 0.8 ? p.light : mix(p.light, WHITE, 0.5);
+        const shape = Array.from({ length: 3 }, (_, k) => {
+          const a = (k / 3) * Math.PI * 2 + Math.random() * 1.2;
+          const rr = 0.5 + Math.random() * 0.6;
+          return [Math.cos(a) * rr, Math.sin(a) * rr] as [number, number];
+        });
+        debris.push({ kind: "shard", x, y, z, born: t, life: 1400, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 18,
+                      size: (0.05 + Math.random() * 0.09) * (0.8 + 0.4 * k), shape,
+                      vx: dx * (3 + Math.random() * 5) + gauss() * 0.6, vy: dy * (3 + Math.random() * 5) - Math.random() * 1.2,
+                      vz: -(2.5 + Math.random() * 5) * k, c, edge: mix(c, WHITE, 0.45) });
+      }
+      const cam = camZ(t);
+      for (let i = 0; i < Math.round(26 * k); i++) {             // the old tunnel shakes: crumbs fall from the ceiling
+        debris.push({ kind: "crumb", x: (Math.random() * 2 - 1) * HW * 0.95, y: -HH + 0.02, z: cam + 0.5 + Math.random() * 3,
+                      born: t + Math.random() * 160, life: 1700, rot: 0, spin: 0, size: 0.018 + Math.random() * 0.02,
+                      vx: gauss() * 0.1, vy: Math.random() * 0.3, vz: 0, c: mix(CONCRETE, WHITE, 0.25 + Math.random() * 0.3), edge: DUST });
+      }
+      if (fx.embers > 0) {                                       // embers drifting up through the picture
+        for (let i = 0; i < Math.round(90 * fx.embers); i++) {
+          motes.push({ kind: "ember", x: Math.random() * W, y: H * (0.35 + Math.random() * 0.7), vx: (Math.random() - 0.5) * 14 * PX,
+                       vy: -(10 + Math.random() * 26) * PX, c: Math.random() < 0.5 ? [255, 154, 60] : [255, 214, 120],
+                       born: t + Math.random() * 300, life: 900 + Math.random() * 900, ph: Math.random() * 6 });
+        }
+      }
+      if (fx.arcs > 0) arcs = { amt: fx.arcs, at: t, gate };
+      if (fx.gold) {                                             // gold lightning: three bolts down to the impact
+        const iy = VY + BALL_Y * (F0 / LEAD);
+        [0, 90, 200].forEach((lag, n) => {
+          const x0 = W * (0.2 + 0.3 * n + (Math.random() - 0.5) * 0.15);
+          bolts.push({ pts: bolt(x0, -2, CX + (Math.random() - 0.5) * W * 0.1, iy, 0.22, Math.random), born: t + lag, life: 90 + n * 20,
+                       c: [255, 244, 200], glow: GOLD });
+        });
+      }
+      if (fx.confetti) {                                         // and gold confetti over the walkout
+        for (let i = 0; i < 170; i++) {
+          motes.push({ kind: "confetti", x: Math.random() * W, y: -Math.random() * H * 0.9, vx: (Math.random() - 0.5) * 10 * PX,
+                       vy: (22 + Math.random() * 30) * PX, c: CONFETTI[i % CONFETTI.length], born: t + Math.random() * 400,
+                       life: 2600 + Math.random() * 900, ph: Math.random() * 6 });
+        }
+      }
       smashes.push({ gate, at: t });
     };
 
@@ -229,6 +347,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
 
     const line = (x0: number, y0: number, x1: number, y1: number) => {
       const n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+      if (!(n <= 4 * (W + H))) return;                       // never a runaway loop on a wild (or non-finite) point
       for (let i = 0; i <= n; i++) ctx.fillRect(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 1, 1);
     };
 
@@ -239,8 +358,20 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       buf[i] = 0xff000000 | (q(b) << 16) | (q(g) << 8) | q(r);
     };
 
-    /** The tunnel itself: walls, ceiling and floor, one ray per pixel (the same maths as castTunnel), up to `limit`. */
-    const drawTunnel = (cam: number, limit: number) => {
+    /** A lamp's state: most burn steadily, a few are dead and a few are on the blink. 1 = fully on. */
+    const lampOn = (k: number, t: number) => {
+      const h = hash2(k, 11);
+      if (h < 0.07) return 0.15;
+      if (h < 0.17) return Math.sin(t * 0.021 + k * 7) + Math.sin(t * 0.053 + k) > 0.4 ? 1 : 0.2;
+      return 1;
+    };
+    const texel = (sf: Surface, z: number, across: number) =>
+      Math.min(sf.rows - 1, Math.max(0, (across * TPU) | 0)) * sf.cols + Math.min(sf.cols - 1, Math.max(0, (z * TPU) | 0));
+    const unpack = (v: number): Rgb => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255];
+
+    /** The tunnel itself: walls, ceiling and floor, one ray per pixel (the same maths as castTunnel), up to `limit`.
+     *  `surge` brightens every lamp for a moment after a smash. */
+    const drawTunnel = (cam: number, limit: number, t: number, surge: number) => {
       const open = smashed >= tl.tier;
       const lit = open ? PALETTE[tl.tier] : null;
       for (let y = 0; y < H; y++) {
@@ -250,51 +381,73 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
           const rx = (x + 0.5 - CX) / F;
           const ts = rx !== 0 ? HW / Math.abs(rx) : Infinity;
           const tf = ry !== 0 ? HH / Math.abs(ry) : Infinity;
-          const t = Math.min(ts, tf);
-          if (t > limit) { buf[i] = 0xff000000; continue; }
-          const z = cam + t;
+          const t_ = Math.min(ts, tf);
+          if (t_ > limit) { buf[i] = 0xff000000; continue; }
+          const z = cam + t_;
           const zf = fract(z);
           const beyond = z > tl.tier * GAP;                       // the stretch after the last gate: the walkout light
           const seg = Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9)));
           const p = beyond ? PALETTE[tl.tier] : PALETTE[seg];
+          const pool = Math.exp(-((zf - 0.3) ** 2) / 0.03) * lampOn(Math.floor(z), t);
           let c: Rgb;
           let light: number;
           let glow = false;
           if (ts < tf) {                                           // a side wall; u runs -1 (top) .. 1 (bottom)
             const u = (ry * ts) / HH;
-            const fpz = (t * t) / (HW * F);                        // metres of depth per pixel across the wall
-            const fpu = t / (F * HH);
+            const sf = surf.walls[rx < 0 ? 0 : 1];
+            const ti = texel(sf, z, (u + 1) * HH);
+            const fl = sf.flags[ti];
+            const fpz = (t_ * t_) / (HW * F);                      // metres of depth per pixel across the wall
+            const fpu = t_ / (F * HH);
             const ribD = Math.abs(fract(z / 0.75 + 0.5) - 0.5) * 0.75;
             const seamD = Math.abs(fract(z / 1.5 + 0.5) - 0.5) * 1.5;
             const frameD = Math.abs(z - Math.round(z / GAP) * GAP);
             if (frameD < Math.max(0.06, 0.6 * fpz) && z > 0.5) c = mix(p.light, STEEL, 0.55);          // the door frame of a gate
+            else if (fl & F_DECAL) { c = unpack(sf.rgb[ti]); glow = (fl & F_EMISSIVE) !== 0; }          // hung on the wall
             else if (ribD < Math.max(0.035, 0.55 * fpz)) {
-              c = ribD < Math.max(0.012, 0.25 * fpz) ? mix(STEEL, WHITE, 0.25) : STEEL;                    // steel rib, lit edge
-              if (u < -0.72 && u > -0.86) { c = mix(p.light, WHITE, 0.5); glow = true; }                // a lamp on the rib
-            } else if (u > 0.5) c = mix(p.wall, BLACK, 0.12);                                           // painted lower band
-            else if (u > 0.42) c = mix(p.light, BLACK, 0.25);                                           // its trim
-            else if (seamD < Math.max(0.018, 0.4 * fpz) || Math.abs(u + 0.15) < Math.max(0.015, 0.6 * fpu)) c = mix(CONCRETE, BLACK, 0.4);
-            else c = mix(CONCRETE, p.wall, 0.18 + 0.06 * hash2(Math.floor(z / 1.5), u < -0.15 ? 1 : 2));
-            light = 0.42 + 0.58 * Math.exp(-((zf - 0.3) ** 2) / 0.03) * (0.6 - 0.4 * u);
+              const k = Math.round(z / 0.75);
+              c = ribD < Math.max(0.012, 0.25 * fpz) ? mix(STEEL, WHITE, 0.25) : mix(STEEL, RUST, 0.4 * hash2(k, 5));   // steel rib, rusting
+              if (u < -0.72 && u > -0.86) {                                                             // a lamp on the rib
+                const on = lampOn(k + 100, t);
+                c = mix(mix(p.light, WHITE, 0.5), [30, 30, 36], 1 - on);
+                glow = on > 0.5;
+              }
+            } else {
+              c = unpack(sf.rgb[ti]);
+              if (!(fl & F_PATCH) && u < 0.42 && (seamD < Math.max(0.018, 0.4 * fpz) || Math.abs(u + 0.15) < Math.max(0.015, 0.6 * fpu)))
+                c = mix(c, BLACK, 0.4);                                                                 // panel seams
+            }
+            light = 0.42 + 0.58 * pool * (0.6 - 0.4 * u);
           } else if (ry < 0) {                                     // ceiling: a strip light down the middle
             const u = (rx * tf) / HW;
-            const fp = t / F;
-            if (Math.abs(u) < Math.max(0.15, fp) && zf < 0.55) { c = mix(p.light, WHITE, 0.55); glow = true; }
+            const fp = t_ / F;
+            const on = lampOn(Math.floor(z), t);
+            if (Math.abs(u) < Math.max(0.15, fp) && zf < 0.55) { c = mix(mix(p.light, WHITE, 0.55), [26, 26, 32], 1 - on); glow = on > 0.5; }
             else if (Math.abs(u) < 0.22) c = mix(STEEL, BLACK, 0.45);
-            else if (Math.abs(Math.abs(u) - 0.63) < Math.max(0.025, 0.6 * fp)) c = mix(CEILING, BLACK, 0.4);
-            else c = CEILING;
-            light = 0.55 + 0.3 * Math.exp(-((zf - 0.3) ** 2) / 0.05);
-          } else {                                                 // floor: a guide line, gutters, light pools
+            else {
+              c = unpack(surf.ceiling.rgb[texel(surf.ceiling, z, u + 1)]);
+              if (Math.abs(Math.abs(u) - 0.63) < Math.max(0.025, 0.6 * fp)) c = mix(c, BLACK, 0.4);
+            }
+            light = 0.55 + 0.3 * Math.exp(-((zf - 0.3) ** 2) / 0.05) * on;
+          } else {                                                 // floor: a guide line, gutters, puddles, rubble
             const u = (rx * tf) / HW;
-            const fp = t / F;
-            if (Math.abs(u) < Math.max(0.03, 0.6 * fp)) c = GUIDE;
+            const fp = t_ / F;
+            const ti = texel(surf.floor, z, u + 1);
+            const fl = surf.floor.flags[ti];
+            if (Math.abs(u) < Math.max(0.03, 0.6 * fp) && hash2(Math.floor(z * 4), 9) > 0.12) c = GUIDE;   // worn in places
             else if (Math.abs(u) > 0.9) c = mix(FLOOR, BLACK, 0.45);
-            else c = mix(FLOOR, p.stripe, 0.35);
-            light = 0.38 + 0.62 * Math.exp(-((zf - 0.3) ** 2) / 0.04) * (1 - 0.5 * Math.abs(u));
-            if (Math.abs(u) < 0.2 && zf < 0.55) light += 0.15;                               // the strip light's reflection
+            else c = unpack(surf.floor.rgb[ti]);
+            light = 0.38 + 0.62 * pool * (1 - 0.5 * Math.abs(u));
+            if (Math.abs(u) < 0.2 && zf < 0.55) light += 0.15 * lampOn(Math.floor(z), t);           // the strip light's reflection
+            if (fl & F_PUDDLE) {                                   // standing water mirrors the strip light, shimmering
+              const shimmer = 0.06 * Math.sin(z * 31 + t * 0.012);
+              if (Math.abs(u) < 0.3) { c = mix(c, p.light, 0.4); light += 0.3 * pool + shimmer; }
+              else light += shimmer;
+            }
           }
-          const fog = Math.max(0, Math.min(1, 1.05 - t / VIEW)) ** 1.3;
+          const fog = Math.max(0, Math.min(1, 1.05 - t_ / VIEW)) ** 1.3;
           let k = glow ? Math.max(fog, 0.5) * 1.15 : light * fog;
+          k *= surge;
           if (beyond && lit) {                                     // warm walkout light pouring in from the stadium
             c = mix(c, lit.light, 0.35);
             k = Math.min(1.35, k * 1.25 + 0.15);
@@ -493,7 +646,12 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       if (skipRef.current && !landed) { skipRef.current = false; skipToEnd(now, true); }
       const frozen = now < freezeUntil;                       // hit-stop: time stands still for a beat
       if (frozen) t0 += now - last;
+      else if (!reduce && smashed === tl.tier - 1) {          // slow motion as the ball reaches the last gate
+        const rate = slowMo(tl.tier, now - t0, finalAt, slowFor);
+        if (rate < 1) t0 += (now - last) * (1 - rate);
+      }
       const t = now - t0;
+      const slow = smashed === tl.tier - 1 ? Math.max(0, Math.min(1, 1 - (finalAt - t) / slowFor)) : 0;
       const dt = frozen ? 0 : Math.min(0.05, (now - last) / 1000);
       last = now;
 
@@ -504,7 +662,11 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         lastSmash = { gate: smashed, at: t };
         shake = { amp: 2 + smashed * 0.9 + (final ? 4 : 0), at: t };
         jolt(smashed, final);
-        flash = final ? { amp: 1, at: t, ms: 420 / TEMPO } : { amp: 0.32, at: t, ms: 90 / TEMPO };
+        const tint = mix(PALETTE[smashed].light, WHITE, 0.55);
+        flash = final ? { amp: 0.72, at: t, ms: 420 / TEMPO, c: tint } : { amp: 0.36, at: t, ms: 90 / TEMPO, c: tint };   // the big smash shows through
+        surge = { amp: 0.35 + 0.08 * smashed + (final ? 0.25 : 0), at: t };
+        burst = { amt: power(smashed) * (final ? 1.5 : 0.8), at: t };
+        star = { amt: power(smashed) * (final ? 1.3 : 0.75), at: t, c: mix(PALETTE[smashed].light, WHITE, 0.4) };
         split = { amp: 1 + power(smashed) + (final ? 1 : 0), at: t };
         if (!reduce) freezeUntil = now + hitStopMs(smashed, final);
         callbacks.current.onSmash?.(smashed, final);
@@ -515,12 +677,14 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       }
 
       const pu = (t - lastSmash.at) / PUNCH_MS;                                     // camera punch-in on impact
-      F = F0 * (1 + (pu >= 0 && pu < 1 ? 0.16 * power(lastSmash.gate || 1) * (1 - pu) * (1 - pu) : 0));
+      F = F0 * (1 + (pu >= 0 && pu < 1 ? 0.16 * power(lastSmash.gate || 1) * (1 - pu) * (1 - pu) : 0) + 0.1 * slow * slow);
       const cam = camZ(t);
       const open = smashed >= tl.tier;                     // the last gate is down: the stadium beyond
       const wallZ = open ? exitZ : (smashed + 1) * GAP;
 
-      drawTunnel(cam, Math.min(VIEW, wallZ - cam));
+      const su = (t - surge.at) / SURGE_MS;               // the lights surge, then stutter, after a smash
+      const surgeK = su >= 0 && su < 1 ? 1 + surge.amp * (1 - su) * (1 - su) * (Math.random() < 0.18 * su ? -1.2 : 1) : 1;
+      drawTunnel(cam, Math.min(VIEW, wallZ - cam), t, Math.max(0.35, surgeK));
       if (open) drawStadium(cam, t);
       else drawGate(smashed + 1, wallZ, cam, 0);
       for (let i = smashes.length - 1; i >= 0; i--) {     // broken gates still ahead, far to near
@@ -539,6 +703,19 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       ctx.setTransform(1, 0, 0, 1, ox, oy);
 
       if (!open) drawGateDecor(smashed + 1, cam, t);
+
+      const sd = signZ - cam;                              // THIS IS FUTKRILL, hung from the ceiling before the last gate
+      if (sd > 0.12 && sd < VIEW) {
+        const sc = F / sd;
+        const sw = 1.3 * sc, sh = (sw * sign.height) / sign.width;
+        const sx = Math.round(CX - sw / 2), sy = Math.round(VY + (-HH + 0.07) * sc);
+        const fog = Math.max(0, Math.min(1, 1.05 - sd / VIEW)) ** 1.3;
+        ctx.fillStyle = css(mix(STEEL, BLACK, 0.4 + 0.6 * (1 - fog)));
+        for (const cx of [-0.5, 0.5]) ctx.fillRect(Math.round(CX + cx * sc), Math.round(VY - HH * sc), 1, Math.max(1, sy - Math.round(VY - HH * sc)));
+        ctx.globalAlpha = Math.max(0.15, fog);
+        ctx.drawImage(sign, sx, sy, Math.round(sw), Math.max(1, Math.round(sh)));
+        ctx.globalAlpha = 1;
+      }
 
       if (open) {                                          // light rays turning slowly round the vanishing point
         const glow = Math.min(1, (t - tl.landAt) / 500) * Math.max(0, 1 - (t - tl.landAt) / (SETTLE_MS * 1.6));
@@ -581,14 +758,24 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       for (let i = debris.length - 1; i >= 0; i--) {
         const p = debris[i];
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.rot += p.spin * dt;
+        const age = t - p.born;
+        if (age < 0) { p.x -= p.vx * dt; p.y -= p.vy * dt; p.z -= p.vz * dt; continue; }      // not fallen yet
         p.vy += (p.kind === "dust" ? 0.2 : 2.6) * dt;
         if (p.kind === "dust") { p.vx *= 0.96; p.vy *= 0.96; p.size += 0.25 * dt; }
         const d = p.z - cam;
-        const age = t - p.born;
-        if (d < (p.kind === "dust" ? 0.06 : 0.32) || age > p.life) { debris.splice(i, 1); continue; }   // gone past the lens
+        if (d < (p.kind === "dust" ? 0.06 : 0.32) || age > p.life || (p.kind === "crumb" && p.y > HH)) { debris.splice(i, 1); continue; }
         const sc = F / d;
         const sx = CX + p.x * sc, sy = VY + p.y * sc;
-        if (p.kind === "chip") {
+        if (p.kind === "shard" && p.shape) {                  // a flat shard of the gate, flipping as it spins
+          const sz = Math.min(W * 0.09, p.size * sc);
+          const cos = Math.cos(p.rot), sin = Math.sin(p.rot), flip = 0.3 + 0.7 * Math.abs(Math.cos(p.rot * 0.7));
+          const pts = p.shape.map(([a, b]) => [sx + (a * cos - b * sin) * sz, sy + (a * sin + b * cos) * sz * flip] as [number, number]);
+          ctx.fillStyle = css(mix(p.c, BLACK, Math.max(0, 0.3 - 0.3 * Math.abs(Math.sin(p.rot)))));
+          fillTri(ctx, pts);
+          ctx.fillStyle = css(p.edge);
+          const [a, b] = [...pts].sort((u, v) => u[1] - v[1]);
+          line(a[0], a[1], b[0], b[1]);                       // its lit top edge
+        } else if (p.kind === "chip" || p.kind === "crumb") {
           ctx.fillStyle = css(p.c);
           const sz = Math.max(1, Math.min(3, Math.round(p.size * sc)));
           ctx.fillRect(Math.round(sx), Math.round(sy), sz, sz);
@@ -625,6 +812,70 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         line(x0, y0, x1, y1);
       }
 
+      for (let i = motes.length - 1; i >= 0; i--) {        // embers rising, confetti falling (screen space)
+        const m = motes[i];
+        const age = t - m.born;
+        if (age < 0) continue;
+        if (age > m.life || m.y > H + 4) { motes.splice(i, 1); continue; }
+        const a = age / 1000;
+        const x = m.x + m.vx * a + Math.sin(a * 3 + m.ph) * 3 * PX, y = m.y + m.vy * a;
+        const fade = Math.min(1, 4 * (1 - age / m.life));
+        if (m.kind === "ember") {
+          ctx.fillStyle = css(m.c, fade * (0.55 + 0.45 * Math.abs(Math.sin(a * 9 + m.ph))));
+          ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+        } else {
+          ctx.fillStyle = css(m.c, fade);
+          const wide = Math.floor(a * 9 + m.ph) % 2 === 0;
+          ctx.fillRect(Math.round(x), Math.round(y), wide ? 2 : 1, wide ? 1 : 2);
+        }
+      }
+
+      const au = (t - arcs.at) / (ARC_MS * (0.6 + 0.4 * arcs.amt));
+      if (!reduce && au >= 0 && au < 1) {                  // electric arcs crawling out from the impact
+        const p = PALETTE[arcs.gate];
+        const n = Math.round((2 + 4 * arcs.amt) * (1 - au * 0.5));
+        const ix = CX, iy = VY + BALL_Y * (F / LEAD);
+        for (let k = 0; k < n; k++) {
+          if (Math.random() < 0.25) continue;                // they flicker
+          const a = Math.random() * Math.PI * 2;
+          const r0 = W * 0.04, r1 = W * (0.2 + 0.35 * Math.random()) * (0.6 + arcs.amt * 0.6);
+          const pts = bolt(ix + Math.cos(a) * r0, iy + Math.sin(a) * r0 * 0.8, ix + Math.cos(a) * r1, iy + Math.sin(a) * r1 * 0.8, 0.18, Math.random);
+          for (const [col, off] of [[p.light, 1], [mix(p.light, WHITE, 0.7), 0]] as const) {
+            ctx.fillStyle = css(col, off ? 0.5 : 1);
+            for (let j = 1; j < pts.length; j++) line(pts[j - 1][0] + off, pts[j - 1][1], pts[j][0] + off, pts[j][1]);
+          }
+        }
+      }
+
+      for (let i = bolts.length - 1; i >= 0; i--) {        // gold lightning
+        const b = bolts[i];
+        const age = t - b.born;
+        if (age < 0) continue;
+        if (age > b.life) { bolts.splice(i, 1); continue; }
+        for (const [col, off] of [[b.glow, -1], [b.glow, 1], [b.c, 0]] as const) {
+          ctx.fillStyle = css(col, off ? 0.55 : 1);
+          for (let j = 1; j < b.pts.length; j++) line(b.pts[j - 1][0] + off, b.pts[j - 1][1], b.pts[j][0] + off, b.pts[j][1]);
+        }
+        ctx.fillStyle = css(b.glow, 0.12 * (1 - age / b.life));
+        ctx.fillRect(-8, -8, W + 16, H + 16);
+      }
+
+      const stu = (t - star.at) / STAR_MS;                 // the impact star: long rays and short ones, turning
+      if (stu >= 0 && stu < 1) {
+        const ix = CX, iy = VY + BALL_Y * (F / LEAD);
+        const L = W * 0.22 * star.amt * Math.sqrt(1 - stu);
+        const rot = stu * 0.6;
+        ctx.fillStyle = css(star.c, 1 - stu * 0.6);
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2 + rot;
+          const len = k % 2 ? L * 0.45 : L;
+          line(ix, iy, ix + Math.cos(a) * len, iy + Math.sin(a) * len * 0.85);
+        }
+        const core = Math.max(1, Math.round(W * 0.025 * star.amt * (1 - stu)));
+        ctx.fillStyle = css(WHITE, 1 - stu);
+        ctx.fillRect(Math.round(ix - core / 2), Math.round(iy - core / 2), core, core);
+      }
+
       if (!open) {                                         // speed lines, more of them the faster we go, in the tunnel's light
         const speed = (depthAt(tl, t + 16) - depthAt(tl, t)) * GAP;
         const n = frozen ? 0 : Math.round(speed * 70);
@@ -638,16 +889,37 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         }
       }
 
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const bu = (t - burst.at) / BURST_MS;                // a zoom burst out of the impact: the picture streaks outwards
+      if (!reduce && bu >= 0 && bu < 1) {
+        const amt = burst.amt * (1 - bu);
+        const ix = CX, iy = VY + BALL_Y * (F / LEAD);
+        ctx.globalCompositeOperation = "lighter";
+        for (let k = 1; k <= 3; k++) {
+          const sc = 1 + 0.07 * k * amt;
+          ctx.globalAlpha = (0.2 * amt) / k;
+          ctx.drawImage(canvas, ix - ix * sc, iy - iy * sc, W * sc, H * sc);
+        }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+      }
+      if (slow > 0) {                                      // the world closing in as time slows
+        const g = ctx.createRadialGradient(CX, VY, Math.min(W, H) * 0.25, CX, VY, Math.hypot(W, H) * 0.6);
+        g.addColorStop(0, "rgba(0,0,0,0)");
+        g.addColorStop(1, `rgba(0,0,0,${0.6 * slow})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      }
       const f = flash.amp * Math.max(0, 1 - (t - flash.at) / flash.ms);
       if (f > 0) {
-        ctx.fillStyle = `rgba(255,255,255,${f})`;
-        ctx.fillRect(-8, -8, W + 16, H + 16);
+        ctx.fillStyle = css(flash.c, Math.min(1, f));
+        ctx.fillRect(0, 0, W, H);
       }
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
       const sv = (t - split.at) / SPLIT_MS;
       if (!reduce && sv >= 0 && sv < 1) colourSplit(split.amp * (1 - sv));
 
-      if (t < tl.landAt + Math.max(STOP_AFTER_MS, SETTLE_MS + 200) || debris.length || sparks.length) raf = requestAnimationFrame(frame);
+      if (t < tl.landAt + Math.max(STOP_AFTER_MS, SETTLE_MS + 200) || debris.length || sparks.length || motes.length || bolts.length)
+        raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => {
