@@ -15,6 +15,24 @@ const PALETTE = ["#50dcff", "#6cf08f", "#ffe45c", "#ff9a1f", "#e8412b", "#c69bff
 
 type Search = { query: string; results: NicheResult[]; total: number };
 
+/** Ask the server, retrying quietly when it stumbles (the first call after a deploy can time out while the player
+ *  data loads). A real refusal (4xx, e.g. a name that's too long) comes back at once. null = the search went stale. */
+async function lookup(q: string, stale: () => boolean): Promise<{ results: NicheResult[]; total: number } | { error: string } | null> {
+  for (const wait of [0, 500, 1200, 2500]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    if (stale()) return null;
+    try {
+      const res = await fetch(`/api/niche?q=${encodeURIComponent(q)}`);
+      if (res.status >= 500) continue;
+      const data = await res.json();
+      return res.ok ? data : { error: data.error ?? "Something went wrong." };
+    } catch {
+      /* a network blip or a non-JSON error page: try again */
+    }
+  }
+  return { error: "Couldn't reach the server. Try again." };
+}
+
 function firstVisit(): boolean {
   try {
     if (localStorage.getItem(SEEN_KEY)) return false;
@@ -47,16 +65,11 @@ export default function NicheOMeter() {
     if (q.length < 2) { setSearch(null); return; }
     let stale = false;
     const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/niche?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        if (stale) return;
-        if (!res.ok) { setError(data.error ?? "Something went wrong."); setSearch(null); return; }
-        setError(null);
-        setSearch({ query: q, results: data.results, total: data.total });
-      } catch {
-        if (!stale) setError("Couldn't reach the server. Try again.");
-      }
+      const data = await lookup(q, () => stale);
+      if (stale || data === null) return;
+      if ("error" in data) { setError(data.error); setSearch(null); return; }
+      setError(null);
+      setSearch({ query: q, results: data.results, total: data.total });
     }, 220);
     return () => { stale = true; clearTimeout(t); };
   }, [query]);
