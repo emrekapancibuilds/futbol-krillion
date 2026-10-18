@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import SiteHeader from "@/components/SiteHeader";
 import UnlimitedHub from "@/components/UnlimitedHub";
 
 export const metadata: Metadata = { title: "Futkrill Unlimited" };
@@ -8,9 +9,10 @@ export const metadata: Metadata = { title: "Futkrill Unlimited" };
 export default function Unlimited() {
   return (
     <main className="shell">
-      <header className="topbar">
-        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
-      </header>
+      <SiteHeader>
+        <Link className="navlink" href="/">Daily</Link>
+        <Link className="navlink hide-narrow" href="/niche">Niche-o-meter</Link>
+      </SiteHeader>
       <div className="middle">
         <UnlimitedHub />
       </div>

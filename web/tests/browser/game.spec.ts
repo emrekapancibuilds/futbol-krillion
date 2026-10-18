@@ -5,7 +5,7 @@ const premium={...free,premium:true,canManage:true,status:'paid',purchasedAt:'20
 const pitch=(page:Page)=>page.getByRole('dialog',{name:'Unlock Unlimited'});
 async function closePitch(page:Page){await expect(pitch(page)).toBeVisible();await page.keyboard.press('Escape');await expect(pitch(page)).toHaveCount(0);}
 
-test('daily stays free; one-time pricing matches the existing pixel design on desktop and mobile',async({page})=>{
+test('daily stays free; one-time pricing fits the clean design on desktop and mobile',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await expect(page.getByRole('heading',{name:'DAILY'})).toBeVisible();
  await expect(page.getByText(/30 seconds each/)).toBeVisible();
@@ -144,7 +144,7 @@ test('archive progress and streaks remain separate from free daily',async({page}
  expect(await page.evaluate(()=>localStorage.getItem('fk:day:1'))).toBeNull();
 });
 
-test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE and DAILY ARCHIVE',async({page})=>{
+test('subscribers see Unlimited first, a daily countdown, and PRACTICE and DAILY ARCHIVE as main (navy) buttons',async({page})=>{
  await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
  await page.goto('/unlimited');
  const panel=page.getByRole('region',{name:'Futkrill Unlimited'});
@@ -153,12 +153,13 @@ test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE an
  await expect(daily.getByRole('link',{name:"PLAY TODAY'S DAILY"})).toBeVisible();
  await expect(page.getByText('Out of dailies? Keep playing.')).toHaveCount(0);
  expect((await panel.boundingBox())!.y).toBeLessThan((await daily.boundingBox())!.y);
- const yellow=await daily.getByRole('link',{name:"PLAY TODAY'S DAILY"}).evaluate(e=>getComputedStyle(e).backgroundColor);
+ const main=await daily.getByRole('link',{name:"PLAY TODAY'S DAILY"}).evaluate(e=>getComputedStyle(e).backgroundColor);
+ expect(main).toBe('rgb(15, 31, 75)');                          // the site's navy
  for (const name of ['PRACTICE','DAILY ARCHIVE']) {
   const button=panel.getByRole('button',{name,exact:true});
   await expect(button).not.toHaveClass(/secondary/);
-  await expect(button).toHaveCSS('background-color',yellow);
-  await expect(button).toHaveCSS('color','rgb(26, 18, 4)');   // near-black text on the yellow
+  await expect(button).toHaveCSS('background-color',main);
+  await expect(button).toHaveCSS('color','rgb(255, 255, 255)');   // white text on the navy
  }
  const {number}=await (await page.request.get('/api/daily')).json();
  await page.evaluate(n=>localStorage.setItem(`fk:day:${n}`,JSON.stringify({results:Array.from({length:7},()=>({status:'passed',points:0,tier:null,key:'x'}))})),number);
@@ -357,7 +358,7 @@ test('the first page is an unboxed centred title, Daily description and start bu
  await page.goto('/');
  const home=page.getByRole('region',{name:"Today's daily"});
  const heading=home.getByRole('heading',{name:'DAILY'});
- const description=home.getByText('7 prompts · 30 seconds each · rarer answers score more');
+ const description=home.getByText('7 prompts, 30 seconds each · rarer answers score more.');
  const start=home.getByRole('button',{name:'KICK OFF',exact:true});
  await expect(heading).toBeVisible();await expect(description).toBeVisible();await expect(start).toBeVisible();
  await expect(home).not.toHaveClass(/panel/);
@@ -369,17 +370,18 @@ test('the first page is an unboxed centred title, Daily description and start bu
  await expect(page.locator('main')).not.toContainText(/#\d/);
 });
 
-test('the first page has a big white FUTKRILL wordmark with a gold outline, and it fits a phone',async({page})=>{
+test('the first page has a big two-tone FUTKRILL wordmark, FUT in navy and KRILL in gold, and it fits a phone',async({page})=>{
  for(const width of [375,1100]){
   await page.setViewportSize({width,height:800});
   await page.goto('/');
   const mark=page.getByTestId('wordmark');
   await expect(mark).toHaveText('FUTKRILL');
-  await expect(mark).toHaveCSS('color','rgb(255, 255, 255)');
-  expect(await mark.evaluate(e=>getComputedStyle(e).textShadow)).toContain('rgb(255, 206, 72)');   // the gold outline
-  expect((await mark.boundingBox())!.height).toBeGreaterThanOrEqual(36);                            // large
+  await expect(mark.locator('.fut')).toHaveCSS('color','rgb(15, 31, 75)');      // navy (user, 2026-10-18)
+  await expect(mark.locator('.krill')).toHaveCSS('color','rgb(242, 183, 5)');   // gold
+  expect((await mark.boundingBox())!.height).toBeGreaterThanOrEqual(48);         // large
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
+ await expect(page.getByRole('button',{name:'KICK OFF',exact:true})).toHaveCSS('background-color','rgb(15, 31, 75)');
 });
 
 // --- Niche-o-meter (user, 2026-10-16) ----------------------------------------------------------------------------
@@ -463,37 +465,60 @@ test('niche-o-meter: it is linked from the first page and the header on a wide s
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
-// --- The live matchday scene (2026-10-16) ------------------------------------------------------------------------
-const sceneSnapshot=(page:import('@playwright/test').Page)=>page.getByTestId('scene').evaluate((c:HTMLCanvasElement)=>{
- const ctx=c.getContext('2d')!;const d=ctx.getImageData(0,0,c.width,c.height).data;let h=0,lit=0;
- for(let i=0;i<d.length;i+=4*97){h=(h*31+d[i]+d[i+1]*3+d[i+2]*7)>>>0;if(d[i]+d[i+1]+d[i+2]>60)lit++;}
- return {h,lit,w:c.width,hgt:c.height};
+// --- The clean design (2026-10-18): a static backdrop and the ball drop ------------------------------------------
+test('a faint, static stadium sits behind every page and nothing in the background animates',async({page})=>{
+ for (const path of ['/','/terms','/unlimited']) {
+  await page.goto(path);
+  await expect(page.locator('.backdrop svg')).toBeVisible();
+  await expect(page.locator('.backdrop')).toHaveAttribute('aria-hidden','true');
+  await expect(page.locator('canvas')).toHaveCount(0);                                   // no live scene any more
+ }
 });
 
-test('the matchday scene draws behind every page and keeps moving',async({page})=>{
- await page.setViewportSize({width:1100,height:800});
- await page.goto('/');
- const scene=page.getByTestId('scene');
- await expect(scene).toHaveAttribute('data-ready','wide',{timeout:20000});
- await expect(scene).toHaveAttribute('aria-hidden','true');
- const a=await sceneSnapshot(page);
- expect(a.lit).toBeGreaterThan(500);                                                    // a picture, not a blank canvas
- await page.waitForTimeout(1200);
- const b=await sceneSnapshot(page);
- expect(b.h).not.toBe(a.h);                                                             // the crowd, flashes and lights move
- await page.goto('/terms');
- await expect(page.getByTestId('scene')).toHaveAttribute('data-ready','wide',{timeout:20000});
+const dropRound=async(page:Page,tier:number,points:number)=>{
+ await page.route('**/api/round/start',r=>r.fulfill({json:{text:'Name a player',token:'t',previewMs:0,deadline:Date.now()+90000,now:Date.now()}}));
+ await page.route('**/api/round/answer',r=>r.fulfill({json:{status:'accepted',name:'Fixture Player',tier,points,fact:'fixture',proof:'p'}}));
+ await page.goto('/');await page.getByRole('button',{name:'KICK OFF',exact:true}).click();
+ await page.getByPlaceholder('type one answer').fill('x');await page.getByRole('button',{name:'SHOOT'}).click();
+};
+
+test('after a correct answer the ball drops through the levels and lands on the floor of the answer\'s tier',async({page})=>{
+ await dropRound(page,3,20);
+ const drop=page.getByTestId('ball-drop');
+ await expect(drop).toBeVisible();
+ await expect(drop.locator('.drop-level')).toHaveCount(3);                                 // it falls as far as Part-Time Fan, no further
+ await expect(drop.locator('.drop-level').nth(2)).toContainText('Part-Time Fan');
+ await expect(drop.locator('.drop-level.hit')).toHaveCount(1,{timeout:5000});             // it hits that floor
+ await expect(drop.locator('.drop-level.hit')).toContainText('20 PTS');
+ await expect(page.locator('.tier-banner')).toContainText('+20 PTS');
+ await expect(page.getByRole('button',{name:'NEXT QUESTION'})).toBeVisible({timeout:8000});  // then the result card
+ await expect(page.getByTestId('ball-drop')).toHaveCount(0);
 });
 
-test('phones get the tall scene, and with Reduced Motion it holds one still frame',async({page})=>{
+test('a rarer answer drops further and takes longer to land; a tap skips straight to the landing',async({page})=>{
+ await page.addInitScript(()=>localStorage.clear());                                      // a fresh daily each time round
+ const landing=async(tier:number,points:number)=>{
+  const t0=Date.now();await dropRound(page,tier,points);
+  await expect(page.locator('.drop-level.hit')).toHaveCount(1,{timeout:8000});
+  return Date.now()-t0;
+ };
+ const shallow=await landing(1,5);
+ await page.unrouteAll();
+ const deep=await landing(7,200);
+ expect(deep).toBeGreaterThan(shallow+600);
+ await expect(page.getByTestId('ball-drop').locator('.drop-level')).toHaveCount(7);
+ await page.unrouteAll();
+ await dropRound(page,6,100);
+ await expect(page.getByTestId('ball-drop')).toBeVisible();
+ await page.getByTestId('ball-drop').click();                                              // skip
+ await expect(page.locator('.drop-level.hit')).toHaveCount(1,{timeout:600});
+});
+
+test('with Reduced Motion the ball is already down when the drop opens',async({page})=>{
  await page.emulateMedia({reducedMotion:'reduce'});
- await page.setViewportSize({width:390,height:844});
- await page.goto('/');
- await expect(page.getByTestId('scene')).toHaveAttribute('data-ready','tall',{timeout:20000});
- const a=await sceneSnapshot(page);
- expect(a.lit).toBeGreaterThan(300);
- await page.waitForTimeout(1200);
- expect((await sceneSnapshot(page)).h).toBe(a.h);
+ await dropRound(page,5,60);
+ await expect(page.locator('.drop-level.hit')).toHaveCount(1,{timeout:600});
+ await expect(page.locator('.tier-banner')).toContainText('True Analyst');
 });
 
 test('niche-o-meter: a slow first answer from the server (a cold start) is retried quietly instead of showing an error',async({page})=>{

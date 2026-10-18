@@ -1,8 +1,10 @@
 import Link from "next/link";
 
-// Shared frame for the Privacy, Terms and Refunds pages: logo, one long panel, links between them.
+// Shared frame for the Privacy, Terms and Refunds pages: the header, one long card, links between them.
 
 import { RESTORE_BY_EMAIL, SUPPORT_EMAIL } from "@/lib/support.ts";
+
+import SiteHeader from "./SiteHeader.tsx";
 
 export const CONTACT = SUPPORT_EMAIL;
 export { RESTORE_BY_EMAIL };
@@ -14,9 +16,8 @@ export function Mail() {
 export default function LegalPage({ title, effective, children }: { title: string; effective: string; children: React.ReactNode }) {
   return (
     <main className="shell">
-      <header className="topbar">
-        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
-      </header>
+      <SiteHeader />
+      <div className="middle">
       <article className="panel legal">
         <h1 className="title">{title}</h1>
         <p className="muted effective">Effective {effective}</p>
@@ -28,6 +29,7 @@ export default function LegalPage({ title, effective, children }: { title: strin
           <Link href="/refunds">Refunds</Link>
         </p>
       </article>
+      </div>
     </main>
   );
 }

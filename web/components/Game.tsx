@@ -5,19 +5,20 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
-import { crowdReaction, type Reaction } from "@/lib/crowd-mood.ts";
 import { withYou, type TierList } from "@/lib/game/columns.ts";
 import { countdown } from "@/lib/game/countdown.ts";
 import { dayLabel, dayLabelShort } from "@/lib/game/dayLabel.ts";
 import { currentStreak, roundScore, scoreRound, SET_ROUNDS } from "@/lib/game/streak.ts";
 import { shareText, streakAfter } from "@/lib/share.ts";
-import { MAX_SCORE, TIER_COLORS, tierInfo } from "@/lib/tiers.ts";
+import { MAX_SCORE, tierInfo } from "@/lib/tiers.ts";
 
+import BallDrop from "./BallDrop.tsx";
+import { Arrow, CalendarIcon, CentreSpot, TierBadge } from "./Brand.tsx";
 import RoundColumns from "./RoundColumns.tsx";
+import SiteHeader from "./SiteHeader.tsx";
 import Standing from "./Standing.tsx";
 import { StreakBadge, StreakLost } from "./Streak.tsx";
 import { billingSession } from "./SubscriptionPanel";
-import TunnelReveal from "./TunnelReveal.tsx";
 
 type DayInfo = { number: number; date: string; rounds: number; nextAt: string; snapshot: string; gameId?: string; mode?: string };
 export type Result = { status: "accepted" | "missed" | "passed"; points: number; tier: number | null; name?: string; fact?: string;
@@ -75,27 +76,13 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
   const [shake, setShake] = useState(0);
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<number | null>(null);
-  const [landed, setLanded] = useState(true); // false while the tier reveal runs, so the score is not given away
+  const [landed, setLanded] = useState(true); // false while the ball drops, so the score is not given away
   const [suggest, setSuggest] = useState<{ asked: string; name: string } | null>(null);  // "Bale -> Gareth Bale?"
   const [passing, setPassing] = useState(false);                                         // "Pass on this one?"
   const [leaving, setLeaving] = useState(false);                                         // "Leave this round?"
-  const [mood, setMood] = useState<Reaction | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const yesRef = useRef<HTMLButtonElement>(null);
-  // Sound is off for now (user, 2026-10-11). lib/crowd-sound.ts keeps the crowd, cheers, groans and gate smashes
-  // ready to wire back in here.
-
   useEffect(() => { if (suggest || passing) yesRef.current?.focus(); }, [suggest, passing]);
-
-  // The stands react to each round: settled after a missed chance, bouncing faster the better the answer.
-  useEffect(() => {
-    const b = document.body;
-    b.dataset.crowd = mood?.mood ?? "normal";
-    if (mood?.beatMs) b.style.setProperty("--crowd-beat", `${mood.beatMs}ms`);
-    else b.style.removeProperty("--crowd-beat");
-  }, [mood]);
-
-  const react = (status: Result["status"], tier: number | null) => setMood(crowdReaction(status, tier));
 
   useEffect(() => {
     void billingSession().catch(() => {});
@@ -144,7 +131,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
   const slot = (l: Live) => (unlimited ? { prompt: l.prompt } : { day: day!.number, round: l.round, ...(archive ? { gameId: day!.gameId } : {}) });
   const inPreview = !!live && now < live.previewEnd;
 
-  /** `quiet`: the player left mid-round, so no result screen and no crowd reaction; straight back to the start. */
+  /** `quiet`: the player left mid-round, so no result screen; straight back to the start. */
   const finishRound = (r: Result, quiet = false) => {
     const scored: Result = { ...r, text: live?.text, ...scoreRound(saved.results, r.status) };   // streak, bonus and lost streak
     const results = [...saved.results, unlimited ? { ...scored, prompt: live?.prompt } : scored];
@@ -155,8 +142,6 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
     persist(s);
     setLanded(r.status !== "accepted");
     setSuggest(null); setPassing(false); setLeaving(false);
-    if (quiet) setMood(null);
-    else if (r.status !== "accepted") react(r.status, null);  // accepted answers react when the tunnel lands
     setPhase(quiet ? (day && results.length >= day.rounds ? "end" : "home") : "result");
     if (day && !unlimited && !archive && s.results.length >= day.rounds) {
       const prev = store.get<{ last: number; streak: number }>("fk:streak");
@@ -175,7 +160,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
 
   const start = async (base: Saved = saved) => {
     if (!day || busy) return;
-    setBusy(true); setMiss(null); setInput(""); setError(null); setSuggest(null); setPassing(false); setMood(null);
+    setBusy(true); setMiss(null); setInput(""); setError(null); setSuggest(null); setPassing(false);
     const round = base.results.length;
     const { ok, data } = unlimited
       ? await post<StartResponse>("/api/unlimited/start", { seen: base.seen ?? [], category: base.category ?? "mixed",
@@ -238,16 +223,13 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
-        <div className="right">
-          {/* Not mid-round: EXIT is the way out then, and the header has no room for both on a 375px phone. */}
-          {phase !== "round" && phase !== "result" && <Link className="linkish" href="/unlimited">Unlimited</Link>}
-          {phase !== "round" && phase !== "result" && <Link className="linkish hide-narrow" href="/niche">Niche-o-meter</Link>}
-          {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}
-          {day && <div className="led">{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}${dayLabelShort(day.date)}`} · {fmt(landed ? total : total - (last ? roundScore(last) : 0))}</div>}
-        </div>
-      </header>
+      <SiteHeader>
+        {/* Not mid-round: EXIT is the way out then, and the header has no room for both on a 375px phone. */}
+        {phase !== "round" && phase !== "result" && <Link className="navlink" href="/unlimited">Unlimited</Link>}
+        {phase !== "round" && phase !== "result" && <Link className="navlink hide-narrow" href="/niche">Niche-o-meter</Link>}
+        {(phase === "round" || phase === "result") && <button className="exit" onClick={exit} disabled={busy}>EXIT</button>}
+        {day && <div className="led"><CalendarIcon />{unlimited ? "UNLIMITED" : `${archive ? "ARCHIVE " : ""}${dayLabelShort(day.date)}`} · {fmt(landed ? total : total - (last ? roundScore(last) : 0))}</div>}
+      </SiteHeader>
 
       <div className="middle">
       {error && <div className="panel" role="alert">{error}</div>}
@@ -257,11 +239,11 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
         : <Home day={day} done={done} onStart={() => start()} busy={busy} />)}
 
       {phase === "round" && live && day && (
-        <section className="panel stack" style={{ gap: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <section className="panel stack" style={{ gap: 16 }}>
+          <div className="round-head">
             <Pips n={day.rounds} done={done} />
             <StreakBadge streak={currentStreak(saved.results)} />
-            <span className="muted" style={{ whiteSpace: "nowrap" }}>{unlimited ? `${typeLabel(saved.category).toUpperCase()} · ` : ""}ROUND {live.round + 1} / {day.rounds}</span>
+            <span className="round-count">{unlimited ? `${typeLabel(saved.category).toUpperCase()} · ` : ""}ROUND {live.round + 1} / {day.rounds}</span>
           </div>
           <h1 className="title">{live.text}</h1>
           {leaving && (
@@ -304,13 +286,13 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
               </div>
             </>
           )}
-          <p className="muted" style={{ margin: 0, fontSize: 14 }}>Rarer correct answers score more. Back-to-back correct answers build a streak bonus. Wrong guesses cost only time.</p>
+          <p className="round-hint">Rarer correct answers score more. Back-to-back correct answers build a streak bonus. Wrong guesses cost only time.</p>
         </section>
       )}
 
       {phase === "result" && last && day && (
         <RoundResult result={last} roundsLeft={day.rounds - done} onNext={next} onAnswers={() => setModal(done - 1)}
-                     onLanded={() => { setLanded(true); react("accepted", last.tier); }} />
+                     onLanded={() => setLanded(true)} />
       )}
 
       {phase === "end" && day && (unlimited
@@ -336,12 +318,15 @@ function Home({ day, done, onStart, busy }: { day: DayInfo; done: number; onStar
   const mode = day.mode === "archive" ? "ARCHIVE" : "DAILY";
   return (
     <motion.section className="daily-home" aria-label={`${mode === "DAILY" ? "Today's daily" : "Archive game"}`}
-                    initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="wordmark" data-testid="wordmark">FUTKRILL</div>
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+      <div className="wordmark" data-testid="wordmark" aria-label="FUTKRILL"><span className="fut">FUT</span><span className="krill">KRILL</span></div>
       <h1 className="daily-title">{mode === "DAILY" ? mode : `Archive - ${dayLabel(day.date)}`}</h1>
-      <p className="daily-description">7 prompts · 30 seconds each · rarer answers score more</p>
-      <button className="btn" onClick={onStart} disabled={busy}>{done > 0 ? `CONTINUE · ROUND ${done + 1}` : "KICK OFF"}</button>
-      <Link className="btn secondary" href="/niche">NICHE-O-METER</Link>
+      <p className="daily-description">7 prompts, 30 seconds each · rarer answers score more.</p>
+      <div className="actions">
+        <button className="btn" onClick={onStart} disabled={busy}>{done > 0 ? `CONTINUE · ROUND ${done + 1}` : "KICK OFF"}<Arrow /></button>
+        <Link className="btn secondary" href="/niche">NICHE-O-METER<Arrow /></Link>
+      </div>
+      <CentreSpot />
     </motion.section>
   );
 }
@@ -352,8 +337,8 @@ function UnlimitedHome({ saved, onPick, onContinue, busy }: {
   const inSet = saved.results.length > 0 && saved.results.length < SET_ROUNDS;
   return (
     <motion.section className="panel stack" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ gap: 16 }}>
-      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-        <img className="pixel" src="/art/mascot.png" alt="" style={{ width: 84 }} />
+      <div className="hub-head">
+        <TierBadge tier={7} size={52} />
         <div>
           <h1 className="title">Unlimited</h1>
           <p className="muted" style={{ margin: "6px 0 0" }}>
@@ -393,7 +378,7 @@ function UnlimitedEnd({ saved, total, onOpen, onAgain, onChange, busy }: {
   };
   return (
     <motion.section className="panel stack" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ gap: 16 }}>
-      <div className="muted">FULL TIME · {label.toUpperCase()}</div>
+      <div className="eyebrow">FULL TIME · {label.toUpperCase()}</div>
       <div><span className="big-score">{fmt(total)}</span><span className="muted"> / {fmt(MAX_SCORE)}</span></div>
       <Standing seed={`unlimited:${saved.category ?? "mixed"}:${saved.sets ?? 0}`} score={total}
                 field={(n) => `${n} ${label.toUpperCase()} PLAYERS`} />
@@ -425,19 +410,18 @@ function Clock({ deadline, previewEnd, now }: { deadline: number; previewEnd: nu
   );
 }
 
-export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onAnswers }: {
-  result: Result; roundsLeft: number; onNext: () => void; onLanded: () => void; onSmash?: (gate: number, last: boolean) => void;
+export function RoundResult({ result, roundsLeft, onNext, onLanded, onAnswers }: {
+  result: Result; roundsLeft: number; onNext: () => void; onLanded: () => void;
   onAnswers?: () => void;     // opens the answer list for this round, with the player's own answer marked
 }) {
   const accepted = result.status === "accepted" && !!result.tier;
-  const [landedHere, setLandedHere] = useState(!accepted);   // the tier banner is up
-  const [revealing, setRevealing] = useState(accepted);      // the full-screen tunnel is still showing
+  const [landedHere, setLandedHere] = useState(!accepted);   // the ball is down and the tier card is up
+  const [revealing, setRevealing] = useState(accepted);      // the full-screen drop is still showing
   const [mounted, setMounted] = useState(false);             // the overlay lives in <body>, so only after hydration
   useEffect(() => setMounted(true), []);
   const info = result.tier ? tierInfo(result.tier) : null;
-  const colors = result.tier ? TIER_COLORS[result.tier] : null;
 
-  // Once the banner has had its moment the tunnel steps aside for the result card (or sooner, on a tap or key).
+  // Once the tier card has had its moment the drop steps aside for the result card (or sooner, on a tap or key).
   useEffect(() => {
     if (!revealing || !landedHere) return;
     const timer = setTimeout(() => setRevealing(false), 1700);
@@ -448,19 +432,19 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
 
   const overlay = (
     <AnimatePresence>
-      {accepted && revealing && info && colors && (
-        <motion.div className="reveal-overlay" key="reveal" exit={{ opacity: 0 }} transition={{ duration: 0.35 }}
+      {accepted && revealing && info && (
+        <motion.div className="reveal-overlay" key="reveal" exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
                     onPointerDown={() => { if (landedHere) setRevealing(false); }}>
-          <TunnelReveal tier={result.tier!} onSmash={onSmash} onLanded={() => { setLandedHere(true); onLanded(); }} />
+          <BallDrop tier={result.tier!} onLanded={() => { setLandedHere(true); onLanded(); }} />
           {landedHere && (
             <>
               <div className="tier-banner-wrap">
-                <motion.div className="tier-banner" style={{ ["--tier-light" as string]: colors.light }}
-                            initial={{ scale: 2.6, opacity: 0 }} animate={{ scale: 1, opacity: 1, x: [0, -9, 9, -5, 5, 0] }}
-                            transition={{ type: "spring", stiffness: 420, damping: 15, x: { duration: 0.4, delay: 0.1 } }}>
-                  <img className="pixel" src={info.icon} alt="" />
-                  <div className="tier-name">{info.name.toUpperCase()}</div>
-                  <div className="tier-pts">+{fmt(result.points)} PTS</div>
+                <motion.div className="tier-banner" style={{ ["--tier" as string]: info.color }}
+                            initial={{ y: 16, opacity: 0, scale: 0.94 }} animate={{ y: 0, opacity: 1, scale: 1 }}
+                            transition={{ type: "spring", stiffness: 320, damping: 24 }}>
+                  <TierBadge tier={result.tier!} size={60} />
+                  <div className="tier-name">{info.name}</div>
+                  <div className="tier-pts"><span className="plus">+</span>{fmt(result.points)} PTS</div>
                   {!!result.bonus && <div className="tier-bonus">+{fmt(result.bonus)} STREAK BONUS</div>}
                 </motion.div>
               </div>
@@ -476,22 +460,22 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
     <>
       {mounted && createPortal(overlay, document.body)}
       {!(accepted && revealing) && (
-        <motion.section className="panel stack" style={{ gap: 14 }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          {accepted && info && colors ? (
-            <div style={{ display: "grid", gap: 8, textAlign: "center" }}>
-              <img className="pixel" src={info.icon} alt="" style={{ width: 96, margin: "0 auto" }} />
-              <div className="tier-name" style={{ color: colors.light }}>{info.name.toUpperCase()}</div>
-              <div className="title" style={{ color: "var(--gold)" }}>+{fmt(result.points)} PTS</div>
+        <motion.section className="panel stack" style={{ gap: 16 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          {accepted && info ? (
+            <div className="result-card" style={{ ["--tier" as string]: info.color }}>
+              <TierBadge tier={result.tier!} size={72} />
+              <div className="tier-name">{info.name}</div>
+              <div className="tier-pts"><span className="plus">+</span>{fmt(result.points)} PTS</div>
               {!!result.bonus && <div className="streak-bonus" data-testid="streak-bonus">STREAK BONUS +{fmt(result.bonus)}</div>}
               <StreakBadge streak={result.streak ?? 0} />
-              <div>{info.quip}</div>
+              <div className="quip">{info.quip}</div>
               <div className="muted">Accepted as <strong style={{ color: "var(--ink)" }}>{result.name}</strong></div>
               {result.fact && <div className="muted">{result.fact}</div>}
-              {result.tier === 7 && <motion.div className="led pitch-invasion" animate={{ y: [0, -6, 0] }} transition={{ repeat: 3, duration: 0.4 }}>PITCH INVASION!</motion.div>}
+              {result.tier === 7 && <motion.div className="pitch-invasion" animate={{ y: [0, -5, 0] }} transition={{ repeat: 2, duration: 0.4 }}>PITCH INVASION!</motion.div>}
             </div>
           ) : (
-            <div style={{ textAlign: "center", display: "grid", gap: 8 }}>
-              <div className="title" style={{ color: "var(--red)" }}>{result.status === "passed" ? "PASSED" : "FULL TIME ON THIS ONE"}</div>
+            <div className="result-card">
+              <div className="missed-title">{result.status === "passed" ? "PASSED" : "FULL TIME ON THIS ONE"}</div>
               {!!result.lost && <StreakLost was={result.lost} />}
               <div className="muted">No points this round.</div>
             </div>
@@ -516,7 +500,7 @@ function End({ day, results, total, now, onOpen }: { day: DayInfo; results: Resu
   };
   return (
     <motion.section className="panel stack" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ gap: 16 }}>
-      <div className="muted">FULL TIME · {day.mode === "archive" ? "ARCHIVE" : "DAILY"} - {dayLabel(day.date).toUpperCase()}</div>
+      <div className="eyebrow">FULL TIME · {day.mode === "archive" ? "ARCHIVE" : "DAILY"} - {dayLabel(day.date).toUpperCase()}</div>
       <div><span className="big-score">{fmt(total)}</span><span className="muted"> / {fmt(MAX_SCORE)}</span></div>
       {day.mode !== "archive" && <Standing seed={`daily:${day.number}`} score={total} field={(n) => `TODAY'S ${n} PLAYERS`} />}
       <RoundColumns results={results} onOpen={onOpen} />
@@ -562,7 +546,7 @@ function AnswerList({ slot, label, result, onClose }: { slot: object; label: str
         {!data && !err && <p className="muted">Loading...</p>}
         {tiers.filter((t) => t.count > 0).map((t) => (
             <div key={t.tier}>
-              <h4><img className="pixel" src={tierInfo(t.tier).icon} alt="" />{tierInfo(t.tier).name} · {fmt(t.points)} · {fmt(t.count)}</h4>
+              <h4><TierBadge tier={t.tier} size={26} />{tierInfo(t.tier).name} · {fmt(t.points)} · {fmt(t.count)}</h4>
               <ul>
                 {t.top.map((a) => (
                   <li key={a.name} ref={a.you ? youRef : undefined} className={a.you ? "you" : ""} data-testid={a.you ? "answer-you" : undefined}>
