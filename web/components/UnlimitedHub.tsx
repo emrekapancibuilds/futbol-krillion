@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
 
+import { TierBadge } from "@/components/Brand";
 import DailyCountdown from "@/components/DailyCountdown";
 import UnlockModal from "@/components/UnlockModal";
 import SubscriptionPanel, { type BillingStatus } from "@/components/SubscriptionPanel";
@@ -22,11 +23,11 @@ const PERKS = [
 function Perks() {
   return (
     <motion.section className="panel stack" style={{ gap: 16 }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-        <img className="pixel" src="/art/mascot.png" alt="" style={{ width: 84 }} />
+      <div className="hub-head">
+        <TierBadge tier={7} size={52} />
         <div>
-          <div className="led" style={{ display: "inline-block" }}>UNLIMITED</div>
-          <h1 className="title" style={{ marginTop: 10 }}>Out of dailies? Keep playing.</h1>
+          <span className="tag">UNLIMITED</span>
+          <h1 className="title" style={{ marginTop: 8 }}>Out of dailies? Keep playing.</h1>
         </div>
       </div>
       <ul className="perks">

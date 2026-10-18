@@ -1,27 +1,28 @@
 "use client";
 
-// "How you stack up": the field's scores as a blocky pixel curve, the player's total as a gold marker, and the
-// share of players they beat. The numbers are a MOCK for now (lib/standings.ts).
+// "How you stack up": the field's scores as a smooth curve, the player's total as a marker, and the share of players
+// they beat. The numbers are a MOCK for now (lib/standings.ts).
 
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { mockStandings } from "@/lib/standings.ts";
 
 const VW = 280;          // viewBox width
 const CH = 78;           // chart height, above the axis line
 const fmt = (n: number) => n.toLocaleString("en-US");
-const BAR_STAGGER = 0.007;   // seconds between neighbouring bars rising, left to right (the whole sweep takes about 0.8 s)
-const BAR_RISE = 0.4;
+const DRAW = 0.7;            // seconds for the curve to draw in
 
 export default function Standing({ seed, score, field }: { seed: string; score: number; field: (players: string) => string }) {
   const s = mockStandings(seed, score);
   const youX = Math.min(VW - 1, (score / s.max) * VW);
-  const barW = VW / s.curve.length;
   const [shown, setShown] = useState(0);
   const still = useReducedMotion() ?? false;
-  // The curve rises bar by bar, then the marker slides in while the percentage counts up.
-  const markerDelay = still ? 0 : s.curve.length * BAR_STAGGER + BAR_RISE * 0.6;
+  const clip = useId().replace(/:/g, "");
+  // The curve draws in, then the marker slides in while the percentage counts up.
+  const markerDelay = still ? 0 : DRAW * 0.8;
+  const pts = s.curve.map((v, i) => [((i + 0.5) / s.curve.length) * VW, CH - v * (CH - 6)] as const);
+  const line = `M 0 ${CH} ` + pts.map(([x, y]) => `L ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ") + ` L ${VW} ${CH}`;
 
   useEffect(() => {
     let id: ReturnType<typeof setInterval> | undefined;
@@ -41,22 +42,15 @@ export default function Standing({ seed, score, field }: { seed: string; score: 
   return (
     <div className="standing">
       <div className="muted standing-head">HOW YOU STACK UP</div>
-      <svg viewBox={`0 -14 ${VW} ${CH + 30}`} shapeRendering="crispEdges" role="img"
+      <svg viewBox={`0 -14 ${VW} ${CH + 30}`} role="img"
            aria-label={`Better than ${s.percentile}% of ${fmt(s.players)} players`}>
-        {s.curve.map((v, i) => {
-          const h = Math.max(1, Math.round(v * (CH - 6)));
-          const x = Math.floor(i * barW);
-          const w = Math.floor((i + 1) * barW) - x;     // whole units, so neighbours neither overlap nor leave gaps
-          const beaten = (i + 1) * barW <= youX;
-          return (
-            <motion.g key={i} style={{ originY: 1, transformBox: "fill-box" }} initial={still ? false : { scaleY: 0 }}
-                      animate={{ scaleY: 1 }} transition={{ delay: i * BAR_STAGGER, duration: BAR_RISE, ease: "easeOut" }}>
-              <rect x={x} y={CH - h} width={w} height={h} className={beaten ? "bar-beaten" : "bar-rest"} />
-              <rect x={x} y={CH - h} width={w} height={2} className="bar-top" />
-            </motion.g>
-          );
-        })}
-        <rect x={0} y={CH} width={VW} height={1} className="axis" />
+        <defs><clipPath id={clip}><rect x={0} y={-14} width={youX} height={CH + 14} /></clipPath></defs>
+        <motion.g initial={still ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DRAW, ease: "easeOut" }}>
+          <path d={line + " Z"} className="area-rest" />
+          <path d={line + " Z"} className="area-beaten" clipPath={`url(#${clip})`} />
+          <path d={line} className="curve" />
+        </motion.g>
+        <line x1={0} y1={CH} x2={VW} y2={CH} className="axis" />
         {ticks.map((t) => (
           <text key={t} x={Math.min(VW - 2, Math.max(2, (t / s.max) * VW))} y={CH + 11}
                 textAnchor={t === 0 ? "start" : t === s.max ? "end" : "middle"} className="tick">{fmt(t)}</text>
@@ -64,8 +58,8 @@ export default function Standing({ seed, score, field }: { seed: string; score: 
         <motion.g initial={still ? false : { x: 0, opacity: 0 }} animate={{ x: youX, opacity: 1 }}
                   transition={{ x: { type: "spring", stiffness: 60, damping: 14, delay: markerDelay },
                                 opacity: { duration: 0.2, delay: markerDelay } }}>
-          <rect x={-1} y={4} width={2} height={CH - 4} className="you-line" />
-          <rect x={-4} y={2} width={8} height={8} className="you-dot" />
+          <line x1={0} y1={6} x2={0} y2={CH} className="you-line" />
+          <circle cx={0} cy={6} r={4.5} className="you-dot" />
           <text x={0} y={-3} textAnchor="middle" className="you-label">YOU</text>
         </motion.g>
       </svg>

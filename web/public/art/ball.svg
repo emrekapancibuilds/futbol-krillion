@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100" width="100" height="100">
+<defs><radialGradient id="s" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#eef1f6"/><stop offset="1" stop-color="#c9d1dd"/></radialGradient><clipPath id="c"><circle r="47"/></clipPath></defs>
+<circle r="47" fill="url(#s)"/>
+<g clip-path="url(#c)" fill="#1b2433" stroke="#1b2433" stroke-width="1.5" stroke-linejoin="round"><polygon points="0.00,-15.00 14.27,-4.64 8.82,12.14 -8.82,12.14 -14.27,-4.64"/><polygon points="18.81,-25.89 13.36,-42.66 27.63,-53.02 41.89,-42.66 36.44,-25.89"/><line x1="0.00" y1="-15.00" x2="0.00" y2="-31.00"/><polygon points="30.43,9.89 44.70,-0.48 58.97,9.89 53.52,26.66 35.88,26.66"/><line x1="14.27" y1="-4.64" x2="29.48" y2="-9.58"/><polygon points="0.00,32.00 14.27,42.36 8.82,59.14 -8.82,59.14 -14.27,42.36"/><line x1="8.82" y1="12.14" x2="18.22" y2="25.08"/><polygon points="-30.43,9.89 -35.88,26.66 -53.52,26.66 -58.97,9.89 -44.70,-0.48"/><line x1="-8.82" y1="12.14" x2="-18.22" y2="25.08"/><polygon points="-18.81,-25.89 -36.44,-25.89 -41.89,-42.66 -27.63,-53.02 -13.36,-42.66"/><line x1="-14.27" y1="-4.64" x2="-29.48" y2="-9.58"/></g>
+<circle r="47" fill="none" stroke="#b9c2cf" stroke-width="1.5"/>
+<ellipse cx="-14" cy="-20" rx="13" ry="8" fill="#fff" opacity=".7" transform="rotate(-30 -14 -20)"/>
+</svg>
