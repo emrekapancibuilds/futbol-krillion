@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { activeFlashes, breathFrame, confettiAt, coverFit, crowdFrame, dustAt, fieldState, flareFlicker, LAYER_DEPTH, litFlares,
-         PARALLAX, parallax, pickComposition, ribbonOffset, smokeAt, twinkle, WAVE_HALF, waveAt,
+import { activeFlashes, breathFrame, confettiAt, coverFit, crowdFrame, decodeLedMap, dustAt, fieldState, flareFlicker, LAYER_DEPTH,
+         litFlares, paintLeds, PARALLAX, parallax, pickComposition, ribbonOffset, screenFrame, smokeAt, twinkle, WAVE_HALF, waveAt,
          type SceneMeta } from "./engine.ts";
 
 const meta = (name: "wide" | "tall"): SceneMeta =>
@@ -33,10 +33,10 @@ test("the scene covers the screen at a whole-number scale, so every art pixel is
 });
 
 test("common screens get the smallest scale that covers them, so little of the scene is cropped away", () => {
-  assert.equal(coverFit(1920, 1080, meta("wide")).scale, 4);       // 1080p
-  assert.equal(coverFit(2880, 1800, meta("wide")).scale, 6);       // a 1440x900 laptop at 2x
-  assert.equal(coverFit(1170, 2532, meta("tall")).scale, 5);       // iPhone 13/14
-  assert.equal(coverFit(1179, 2556, meta("tall")).scale, 5);       // iPhone 15/16
+  assert.equal(coverFit(1920, 1080, meta("wide")).scale, 3);       // 1080p
+  assert.equal(coverFit(2880, 1800, meta("wide")).scale, 5);       // a 1440x900 laptop at 2x
+  assert.equal(coverFit(1170, 2532, meta("tall")).scale, 4);       // iPhone 13/14
+  assert.equal(coverFit(1179, 2556, meta("tall")).scale, 4);       // iPhone 15/16
 });
 
 test("parallax never moves a layer further than the art's margin, at any pointer position or time", () => {
@@ -189,4 +189,50 @@ test("confetti tumbles down inside the picture", () => {
   // pieces fall: on average they are lower a moment later
   const a = confettiAt(10, 90, 512, 1e6), b = confettiAt(10.5, 90, 512, 1e6);
   assert.ok(b.reduce((s, p) => s + p.y, 0) > a.reduce((s, p) => s + p.y, 0));
+});
+
+// A 4x2 LED map: two board pixels, one screen pixel, the rest empty. R, G = texel; B = which (1.. boards, 101.. screens)
+const MAP = new Uint8ClampedArray([
+  3, 0x20, 1, 255,   0, 0, 0, 255,   250, 0x11, 1, 255,   0, 0, 0, 255,       // u=3 v=2; none; u=250+256 v=1; none
+  0, 0, 0, 255,      5, 4, 101, 255, 0, 0, 0, 255,        0, 0, 0, 255,       // screen 0 at u=5 v=4
+]);
+
+test("the LED map says which board or screen each LED pixel belongs to, and its texel there", () => {
+  const m = decodeLedMap(MAP);
+  assert.deepEqual([...m.pix], [0, 2, 5]);
+  assert.deepEqual([...m.which], [1, 1, 101]);
+  assert.deepEqual([...m.u], [3, 506, 5]);
+  assert.deepEqual([...m.v], [2, 1, 4]);
+});
+
+test("LEDs are painted from the boards' strips (scrolled round) and the screens' current picture", () => {
+  const m = decodeLedMap(MAP);
+  // a strips image 520 wide: board 0's strip on rows 0..6 (period 510), screen 0 on rows 7..15 (frames 10 wide)
+  const W = 520;
+  const strips = new Uint32Array(W * 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < W; x++) strips[y * W + x] = (y << 16) | x;     // encode x, y
+  const leds = [{ sy: 0, rows: 7, period: 510, speed: 6 }];
+  const screens = [{ sy: 7, w: 10, h: 9, frames: 4 }];
+  const out = new Uint32Array(8);
+  paintLeds(out, m, { data: strips, width: W }, leds, screens, [0], [0]);
+  assert.equal(out[0], (2 << 16) | 3);                      // board texel u=3 v=2
+  assert.equal(out[2], (1 << 16) | 506);
+  assert.equal(out[5], ((7 + 4) << 16) | 5);                // screen texel u=5 v=4 in frame 0
+  assert.equal(out[1], 0);                                   // not an LED: left alone
+  paintLeds(out, m, { data: strips, width: W }, leds, screens, [7], [2]);
+  assert.equal(out[0], (2 << 16) | 10);                     // scrolled 7 texels on
+  assert.equal(out[2], (1 << 16) | 3);                      // 506 + 7 wraps round the 510 period
+  assert.equal(out[5], ((7 + 4) << 16) | 25);               // frame 2: 2 * 10 + 5
+});
+
+test("the video screens change picture every few seconds, each on its own rhythm", () => {
+  const seen = new Set<number>();
+  for (let t = 0; t < 40; t += 0.25) {
+    const f = screenFrame(t, 0, 4);
+    assert.ok(Number.isInteger(f) && f >= 0 && f < 4);
+    seen.add(f);
+  }
+  assert.equal(seen.size, 4);
+  assert.notDeepEqual(Array.from({ length: 20 }, (_, i) => screenFrame(i, 0, 4)), Array.from({ length: 20 }, (_, i) => screenFrame(i, 1, 4)));
+  assert.equal(screenFrame(3.3, 0, 1), 0);
 });

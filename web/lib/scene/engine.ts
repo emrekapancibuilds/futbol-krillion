@@ -17,12 +17,16 @@ export type SceneMeta = {
   seats: [number, number, number][];           // supporters for the camera flashes: x, y, width in art pixels
   players: [number, number, number, number][];   // the foreground players and the ball: x, y, w, h
   stars: [number, number, number][];              // x, y, brightness 0-2
-  ribbons: Ribbon[];                              // the LED boards and ribbons, scrolled underneath the back layer
+  leds: Led[];                                    // the LED boards and ribbons: tiling text strips, scrolled round
+  screens: ScreenMeta[];                          // the video screens: a row of pictures each
   flares: [number, number][];                     // supporters' flares in the stands, art pixels
   field: FieldSprite[];                           // the players up the pitch, furthest first
 };
-/** An LED board: its rows in the picture, and its tiling strip of text (rows sy.. in the strips image). */
-export type Ribbon = { y: number; h: number; sy: number; period: number; speed: number };
+/** An LED board: its tiling strip of text (rows sy.. of the strips image, `period` texels long), and how fast it
+ *  scrolls (texels a second). Which pixels show it, and at which texel, is in the LED map. */
+export type Led = { sy: number; rows: number; period: number; speed: number };
+/** A video screen: its pictures side by side on rows sy.. of the strips image, each w x h texels. */
+export type ScreenMeta = { sy: number; w: number; h: number; frames: number };
 /** A player up the pitch: his row in the sprite sheet (cell: x, y, w, h of the first frame; then FIELD_FRAMES facing
  *  right and as many facing left), where his feet are on the pitch at home, and pixels per metre along it there. */
 export type FieldSprite = FieldMover & {
@@ -197,4 +201,42 @@ export function confettiAt(t: number, n: number, w: number, h: number) {
     const y = (hash(i * 7 + 4) * h + fall * t) % h;
     return { x, y, c: Math.floor(hash(i * 7 + 5) * 4), wide: (Math.floor(t * 8 + i) % 2) === 0 };
   });
+}
+
+/** The LED map, decoded: for every LED pixel (by index), which board (1..) or screen (101..) it shows, and its texel
+ *  there. In the map's pixels R and G hold the texel (a board's u in R plus the low 4 bits of G, its row in G's high 4
+ *  bits; a screen's u in R and v in G) and B says which. */
+export function decodeLedMap(rgba: Uint8ClampedArray) {
+  const pix: number[] = [], which: number[] = [], u: number[] = [], v: number[] = [];
+  for (let i = 0, p = 0; i < rgba.length; i += 4, p++) {
+    const b = rgba[i + 2];
+    if (!b) continue;
+    pix.push(p); which.push(b);
+    if (b >= 101) { u.push(rgba[i]); v.push(rgba[i + 1]); }
+    else { u.push(rgba[i] | ((rgba[i + 1] & 15) << 8)); v.push(rgba[i + 1] >> 4); }
+  }
+  return { pix: Int32Array.from(pix), which: Uint8Array.from(which), u: Uint16Array.from(u), v: Uint8Array.from(v) };
+}
+
+/** Paint every LED pixel into `out` (one 32-bit pixel each, like the map): boards from their strips, scrolled on by
+ *  `offsets` texels; screens from their picture number `frames`. Other pixels are left alone. */
+export function paintLeds(out: Uint32Array, map: ReturnType<typeof decodeLedMap>, strips: { data: Uint32Array; width: number },
+                          leds: Led[], screens: ScreenMeta[], offsets: number[], frames: number[]) {
+  const { pix, which, u, v } = map;
+  for (let i = 0; i < pix.length; i++) {
+    const w = which[i];
+    if (w >= 101) {
+      const sc = screens[w - 101];
+      if (sc) out[pix[i]] = strips.data[(sc.sy + v[i]) * strips.width + (frames[w - 101] ?? 0) * sc.w + u[i]];
+    } else {
+      const led = leds[w - 1];
+      if (led) out[pix[i]] = strips.data[(led.sy + v[i]) * strips.width + ((u[i] + (offsets[w - 1] ?? 0)) % led.period)];
+    }
+  }
+}
+
+/** Which picture video screen k shows: a new one every 4.5 s, the two screens out of step. */
+export function screenFrame(t: number, k: number, frames: number): number {
+  if (frames <= 1) return 0;
+  return (Math.floor((t + k * 2.3) / 4.5) + k) % frames;
 }
