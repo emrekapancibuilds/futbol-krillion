@@ -1,20 +1,22 @@
 "use client";
 
-// The live matchday scene behind every page (specs: docs/superpowers/specs/2026-10-16-matchday-scene-design.md and
-// 2026-10-17-scene-2-design.md). Draws the layers made by art/scene.py on one canvas, at a whole-number scale of the
-// device pixels so the pixel art stays crisp, and animates them: twinkling stars and drifting clouds, scrolling LED
-// boards, the crowd (its mood comes from the game, on <body data-crowd>) with a Mexican wave now and then, camera
-// flashes, flares and their smoke, floodlight flicker and breathing light shafts, the players up the pitch jogging
-// about, the two in front breathing, dust in the light, confetti after a rare answer, the grass swaying, a slow camera
-// drift and pointer parallax. Pauses while the tab is hidden; with Reduced Motion it draws one still frame.
+// The live matchday scene behind every page (specs: docs/superpowers/specs/2026-10-16-matchday-scene-design.md,
+// 2026-10-17-scene-2-design.md and 2026-10-18-scene-3-design.md). Draws the layers made by art/scene.py on one
+// canvas, at a whole-number scale of the device pixels so the pixel art stays crisp, and animates them: twinkling
+// stars and drifting clouds, scrolling LED boards and changing video screens, the crowd (its mood comes from the game,
+// on <body data-crowd>) with a Mexican wave now and then, camera flashes, flares and their smoke, floodlight flicker
+// and breathing light shafts, the players up the pitch jogging about, the two in front breathing, dust in the light,
+// confetti after a rare answer, the grass swaying, a slow camera drift and pointer parallax. Pauses while the tab is
+// hidden; with Reduced Motion it draws one still frame.
 
 import { useEffect, useRef } from "react";
 
 import { activeFlashes, breathFrame, confettiAt, coverFit, crowdFrame, dustAt, FIELD_FRAMES, fieldState, flareFlicker,
-         LAYER_DEPTH, litFlares, parallax, pickComposition, ribbonOffset, smokeAt, swayFrame, twinkle, WAVE_HALF, waveAt,
+         decodeLedMap, LAYER_DEPTH, litFlares, paintLeds, parallax, pickComposition, ribbonOffset, screenFrame, smokeAt,
+         swayFrame, twinkle, WAVE_HALF, waveAt,
          type Composition, type Mood, type SceneMeta } from "@/lib/scene/engine.ts";
 
-const LAYERS = ["sky", "clouds", "strips", "back", "crowd-1", "crowd-2", "crowd-3", "crowd-4", "pitch", "field",
+const LAYERS = ["sky", "clouds", "strips", "ledmap", "back", "crowd-1", "crowd-2", "crowd-3", "crowd-4", "pitch", "field",
                 "players-1", "players-2", "front-1", "front-2", "glow", "beams"];
 const FRAME_MS = 1000 / 30;
 const STAR_COLOURS = ["#7d88b8", "#c4ccf0", "#ffffff"];
@@ -43,6 +45,10 @@ export default function Scene() {
     let comp: Composition | null = null;
     let meta: SceneMeta | null = null;
     let images: Record<string, HTMLImageElement> = {};
+    // the LEDs: painted into their own small canvas from the strips through the LED map, whenever a board scrolls on
+    // or a screen changes picture
+    let leds: { map: ReturnType<typeof decodeLedMap>; strips: { data: Uint32Array; width: number };
+                canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; image: ImageData; out: Uint32Array; key: string } | null = null;
     let raf = 0;
     let lastDraw = -Infinity;
     let loading = 0;
@@ -61,12 +67,33 @@ export default function Scene() {
         if (token !== loading) return;
         meta = m;
         images = Object.fromEntries(LAYERS.map((l, i) => [l, ims[i]]));
+        leds = prepareLeds(m, images);
         comp = next;
         canvas!.dataset.ready = next;
         draw(seconds());
       } catch {
         /* the plain background colour stays: the site works without the scene */
       }
+    }
+
+    function pixels(im: HTMLImageElement) {
+      const cv = document.createElement("canvas");
+      cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+      const g = cv.getContext("2d", { willReadFrequently: true });
+      if (!g) return null;
+      g.drawImage(im, 0, 0);
+      return g.getImageData(0, 0, cv.width, cv.height);
+    }
+
+    function prepareLeds(m: SceneMeta, ims: Record<string, HTMLImageElement>) {
+      const map = pixels(ims.ledmap), strips = pixels(ims.strips);
+      const cv = document.createElement("canvas");
+      cv.width = m.w; cv.height = m.h;
+      const g = cv.getContext("2d");
+      if (!map || !strips || !g) return null;
+      const image = g.createImageData(m.w, m.h);
+      return { map: decodeLedMap(map.data), strips: { data: new Uint32Array(strips.data.buffer), width: strips.width },
+               canvas: cv, ctx: g, image, out: new Uint32Array(image.data.buffer), key: "" };
     }
 
     function resize() {
@@ -130,16 +157,21 @@ export default function Scene() {
         }
       }
 
-      // the LED boards scroll underneath the holes in the back layer
-      {
-        const o = offset(LAYER_DEPTH.back);
-        for (const r of m.ribbons) {
-          const off = still ? 0 : ribbonOffset(time, r.speed, r.period);
-          for (let x = -off; x < m.w; x += r.period) {
-            const [X, Y] = at(o, x, r.y);
-            ctx.drawImage(images.strips, 0, r.sy, r.period, r.h, X, Y, r.period * scale, r.h * scale);
-          }
+      // the LED boards and the video screens, underneath the holes in the back layer: text scrolling round the bowl,
+      // pictures changing every few seconds
+      if (leds) {
+        const offsets = m.leds.map((l) => (still ? 0 : ribbonOffset(time, l.speed, l.period)));
+        const frames = m.screens.map((sc, k) => (still ? 0 : screenFrame(time, k, sc.frames)));
+        const key = `${offsets.join()}|${frames.join()}`;
+        if (key !== leds.key) {
+          paintLeds(leds.out, leds.map, leds.strips, m.leds, m.screens, offsets, frames);
+          leds.ctx.putImageData(leds.image, 0, 0);
+          leds.key = key;
         }
+        const [X, Y] = at(offset(LAYER_DEPTH.back), 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.drawImage(leds.canvas, X, Y, m.w * scale, m.h * scale);
       }
 
       layer("back", LAYER_DEPTH.back);
