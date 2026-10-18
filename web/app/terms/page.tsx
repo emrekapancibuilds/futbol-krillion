@@ -58,7 +58,7 @@ export default function Terms() {
 
       <h2>Our content</h2>
       <p>
-        The site&apos;s design, artwork and code, and the way its prompts and answers are put together, belong to
+        The site&apos;s design, pixel art and code, and the way its prompts and answers are put together, belong to
         us. You&apos;re welcome to share your results and screenshots. Please don&apos;t copy the game, its art or its
         answer lists to use elsewhere.
       </p>

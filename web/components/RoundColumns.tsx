@@ -3,9 +3,7 @@
 import { motion } from "framer-motion";
 
 import { columnLevel } from "@/lib/game/columns.ts";
-import { TIERS, tierInfo } from "@/lib/tiers.ts";
-
-import { TierBadge } from "./Brand.tsx";
+import { TIER_COLORS, TIERS, tierInfo } from "@/lib/tiers.ts";
 
 import type { Result } from "./Game.tsx";
 
@@ -26,13 +24,14 @@ export default function RoundColumns({ results, onOpen }: { results: Result[]; o
           {results.map((r, i) => {
             const level = columnLevel(r);
             const info = level ? tierInfo(level) : null;
+            const colors = level ? TIER_COLORS[level] : null;
             return (
               <button key={i} className="col" onClick={() => onOpen(i)} data-testid={`column-${i + 1}`} data-level={level}
                       aria-label={`Round ${i + 1}: ${info ? info.name : r.status === "passed" ? "passed" : "no answer"}. See all answers`}>
                 <span className="colstage">
-                  {level ? <TierBadge tier={level} size={32} className="badge" /> : <span className="badge miss">-</span>}
+                  {info ? <img className="pixel badge" src={info.icon} alt="" /> : <span className="badge miss">-</span>}
                   <motion.span className={`colbar ${level ? "" : "stub"}`}
-                               style={{ ["--lvl" as string]: level, ["--tier" as string]: info?.color }}
+                               style={{ ["--lvl" as string]: level, ["--light" as string]: colors?.light, ["--wall" as string]: colors?.wall }}
                                initial={{ scaleY: 0 }} animate={{ scaleY: 1 }}
                                transition={{ duration: 0.55, delay: 0.08 * i, ease: [0.2, 0.9, 0.3, 1] }} />
                 </span>
@@ -44,7 +43,7 @@ export default function RoundColumns({ results, onOpen }: { results: Result[]; o
           })}
         </div>
       </div>
-      <div className="muted" style={{ fontSize: 13 }}>Tap a column to see all the answers.</div>
+      <div className="muted" style={{ fontSize: 14 }}>Tap a column to see all the answers.</div>
     </div>
   );
 }

@@ -9,11 +9,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { betterKnownLine, NOT_FOUND_MESSAGE, type NicheResult } from "@/lib/niche.ts";
 
-import SiteHeader from "./SiteHeader.tsx";
-
 const SEEN_KEY = "fk:niche-seen";
 const BLOCKS = 25;
-const PALETTE = ["#8a94a6", "#4f7cc2", "#2563eb", "#7c3aed", "#e2571b", "#d9a206"];       // everyone knows them -> nobody does (the tiers' colours)
+const PALETTE = ["#50dcff", "#6cf08f", "#ffe45c", "#ff9a1f", "#e8412b", "#c69bff"];       // everyone knows them -> nobody does
 
 type Search = { query: string; results: NicheResult[]; total: number };
 
@@ -85,10 +83,10 @@ export default function NicheOMeter() {
 
   return (
     <main className="shell">
-      <SiteHeader>
-        <Link className="navlink" href="/unlimited">Unlimited</Link>
-        <Link className="navlink" href="/">Back to the game</Link>
-      </SiteHeader>
+      <header className="topbar">
+        <Link href="/"><img className="pixel" src="/art/logo.png" alt="Futkrill" style={{ height: 44 }} /></Link>
+        <div className="right"><Link className="linkish" href="/">Back to the game</Link></div>
+      </header>
 
       <div className="middle">
         <section className="panel stack niche" style={{ gap: 16 }}>
