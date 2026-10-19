@@ -1,10 +1,8 @@
 // Tunnel geometry and smash timing (specs: docs/superpowers/specs/2026-10-16-matchday-scene-design.md and
-// 2026-10-17-scene-2-design.md): pure maths for the per-pixel tunnel, the hit-stop on each smash, the slow motion before
-// the last gate, which fireworks each gate brings, lightning bolts, and the walkout onto the stadium after the last
-// gate. Units: the tunnel is 2*HW wide, gates are GAP apart, depth z runs down the tunnel; screen rays are (dx, dy, 1),
-// so a hit's t is its depth.
-
-import { PAUSE_FROM_TIER, type Timeline } from "./timeline.ts";
+// 2026-10-17-scene-2-design.md): pure maths for the per-pixel tunnel, the hit-stop on each smash, which fireworks each
+// gate brings, lightning bolts, the walkout onto the stadium after the last gate, and the ball dropping to the floor
+// when a gate holds. Units: the tunnel is 2*HW wide, gates are GAP apart, depth z runs down the tunnel; screen rays
+// are (dx, dy, 1), so a hit's t is its depth.
 
 export const HW = 1;
 export const GAP = 3;
@@ -45,23 +43,24 @@ export function settleCam(tier: number, u: number): number {
   return from + (to - from) * (1 - (1 - k) * (1 - k));
 }
 
-/** How long (ms of the run's own timeline) time runs slow right before the final gate: longer for rarer tiers. */
-export function slowWindow(tier: number): number {
-  return 90 + 25 * tier;
-}
+const DROP_MS = 260;                 // the fall to the floor
+const BOUNCY = 0.42;                // each bounce keeps this much of the speed
 
-/** How much of the run's timeline actually runs slow: the full window, except where the run already hangs before the
- *  last gate (True Analyst and up), where only the final rush after the hang does. */
-export function slowSpan(tl: Timeline): number {
-  const finalAt = tl.gates[tl.tier - 1];
-  if (tl.tier < PAUSE_FROM_TIER) return slowWindow(tl.tier);
-  return Math.min(slowWindow(tl.tier), finalAt - tl.segments[tl.segments.length - 1].t0);
-}
-
-/** How fast the run's clock goes at timeline time `t` (1 = normal): slower for the last `window` ms before the final
- *  gate at `finalAt`, and slowest for the rarest tiers. */
-export function slowMo(tier: number, t: number, finalAt: number, window = slowWindow(tier)): number {
-  return t >= finalAt - window && t < finalAt ? 0.55 - 0.045 * tier : 1;
+/** After the ball bounces off a gate that holds, how far it has dropped `ms` later (0 .. `fall`): a fall under gravity,
+ *  three bounces, each lower, then it lies still. */
+export function ballDrop(ms: number, fall: number): number {
+  if (ms <= 0) return 0;
+  const g = (2 * fall) / (DROP_MS * DROP_MS);
+  if (ms < DROP_MS) return 0.5 * g * ms * ms;
+  let t = ms - DROP_MS;
+  let v = g * DROP_MS;
+  for (let k = 0; k < 3; k++) {
+    v *= BOUNCY;
+    const span = (2 * v) / g;
+    if (t < span) return fall - (v * t - 0.5 * g * t * t);
+    t -= span;
+  }
+  return fall;
 }
 
 /** What a smash through `gate` sets off: polygon shards always (more for deeper gates), electric arcs from gate 5,

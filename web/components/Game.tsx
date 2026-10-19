@@ -10,6 +10,7 @@ import { withYou, type TierList } from "@/lib/game/columns.ts";
 import { countdown } from "@/lib/game/countdown.ts";
 import { dayLabel, dayLabelShort } from "@/lib/game/dayLabel.ts";
 import { currentStreak, roundScore, scoreRound, SET_ROUNDS } from "@/lib/game/streak.ts";
+import type { Outcome } from "@/lib/reveal/timeline.ts";
 import { shareText, streakAfter } from "@/lib/share.ts";
 import { MAX_SCORE, TIER_COLORS, tierInfo } from "@/lib/tiers.ts";
 
@@ -425,9 +426,10 @@ function Clock({ deadline, previewEnd, now }: { deadline: number; previewEnd: nu
   );
 }
 
-export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onAnswers }: {
+export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onAnswers, tease }: {
   result: Result; roundsLeft: number; onNext: () => void; onLanded: () => void; onSmash?: (gate: number, last: boolean) => void;
   onAnswers?: () => void;     // opens the answer list for this round, with the player's own answer marked
+  tease?: Outcome;            // force the tunnel's ending (the preview page); random otherwise
 }) {
   const accepted = result.status === "accepted" && !!result.tier;
   const [landedHere, setLandedHere] = useState(!accepted);   // the tier banner is up
@@ -451,7 +453,7 @@ export function RoundResult({ result, roundsLeft, onNext, onLanded, onSmash, onA
       {accepted && revealing && info && colors && (
         <motion.div className="reveal-overlay" key="reveal" exit={{ opacity: 0 }} transition={{ duration: 0.35 }}
                     onPointerDown={() => { if (landedHere) setRevealing(false); }}>
-          <TunnelReveal tier={result.tier!} onSmash={onSmash} onLanded={() => { setLandedHere(true); onLanded(); }} />
+          <TunnelReveal tier={result.tier!} outcome={tease} onSmash={onSmash} onLanded={() => { setLandedHere(true); onLanded(); }} />
           {landedHere && (
             <>
               <div className="tier-banner-wrap">
