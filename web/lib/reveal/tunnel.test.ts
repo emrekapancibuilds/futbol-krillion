@@ -1,8 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { revealTimeline } from "./timeline.ts";
-import { bolt, castTunnel, EXIT, exitCover, GAP, HW, hitStopMs, LEAD, settleCam, slowMo, slowSpan, slowWindow, tierEffects } from "./tunnel.ts";
+import { ballDrop, bolt, castTunnel, EXIT, exitCover, GAP, HW, hitStopMs, LEAD, settleCam, tierEffects } from "./tunnel.ts";
 
 test("a ray through the middle of the screen runs down the tunnel; one near an edge hits the nearest wall", () => {
   const W = 320, H = 200, F = 0.4375 * W, HH = (HW * H) / W;
@@ -38,29 +37,22 @@ test("after the last gate the camera glides out of the tunnel until the stadium 
   assert.ok(settleCam(tier, 0.5) > before && settleCam(tier, 0.5) < after);
 });
 
-test("time slows right before the final gate, more for rarer tiers, and never anywhere else", () => {
-  for (const tier of [1, 3, 5, 7]) {
-    const finalAt = 2000;
-    assert.equal(slowMo(tier, 0, finalAt), 1);
-    assert.equal(slowMo(tier, finalAt, finalAt), 1);
-    assert.equal(slowMo(tier, finalAt + 50, finalAt), 1);
-    const r = slowMo(tier, finalAt - 20, finalAt);
-    assert.ok(r > 0.15 && r < 1, `tier ${tier}: ${r}`);
+test("after bouncing off a gate that holds, the ball drops to the floor, bounces twice and lies still", () => {
+  const fall = 0.4;
+  assert.equal(ballDrop(-10, fall), 0);
+  assert.equal(ballDrop(0, fall), 0);
+  let landings = 0, prev = 0, down = true;
+  for (let ms = 0; ms <= 1500; ms += 2) {
+    const y = ballDrop(ms, fall);
+    assert.ok(y >= 0 && y <= fall + 1e-9, `${y} at ${ms}`);
+    if (down && y < prev) { landings++; down = false; }
+    if (!down && y > prev) down = true;
+    prev = y;
   }
-  assert.ok(slowMo(7, 1980, 2000) < slowMo(1, 1980, 2000));
-  assert.ok(slowWindow(7) > slowWindow(1));
-});
-
-test("when the run already hangs before the last gate, time only slows for the final rush, not during the hang", () => {
-  const tl = revealTimeline(7);
-  const finalAt = tl.gates[6];
-  const w = slowSpan(tl);
-  assert.ok(w > 0 && w < slowWindow(7), `${w}`);
-  const pauseEnd = tl.segments[tl.segments.length - 1].t0;
-  assert.ok(Math.abs(finalAt - w - pauseEnd) < 1e-9, "slow motion starts where the rush starts");
-  assert.equal(slowMo(7, pauseEnd - 10, finalAt, w), 1);
-  assert.ok(slowMo(7, pauseEnd + 1, finalAt, w) < 1);
-  assert.equal(slowSpan(revealTimeline(3)), slowWindow(3));               // no hang below True Analyst: the full window
+  assert.ok(landings >= 2, `it bounced ${landings} times`);
+  assert.equal(ballDrop(1500, fall), fall);
+  assert.equal(ballDrop(5000, fall), fall);
+  assert.ok(ballDrop(120, fall) > 0 && ballDrop(120, fall) < fall);      // a real fall, not a jump cut
 });
 
 test("the deeper gates bring their own fireworks: arcs from 5, embers from 6, gold lightning and confetti at 7", () => {

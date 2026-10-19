@@ -10,16 +10,18 @@
 // photos, posters, scarves, exit signs, extinguishers and a pipe on the walls), with steel ribs (some lamps dead or
 // flickering), a strip light along the ceiling and a guide line on the floor; the gates are bricks in a steel frame
 // with hazard stripes. Ordered dithering keeps it pixel art. A "THIS IS FUTKRILL" sign hangs before the last gate.
-// Each smash: cracks spread as the ball closes in (and, before the last gate, time slows), then a hit-stop freeze, a
-// camera punch and jolt, the ball squashing, a zoom burst, an impact star, a shockwave, sparks, polygon shards,
+// Every run ends with a tease (lib/reveal/timeline.ts): the ball rams a gate, bounces back, rams it again and pushes
+// while time slows, the picture trembles, chips trickle off and light leaks through the spreading cracks. On a break the
+// gate gives and the ball walks out; on a hold (it was the next tier's gate) it bounces off and drops to the floor.
+// Each smash: cracks spread as the ball closes in, then a hit-stop freeze, a camera punch and jolt, the ball squashing, a zoom burst, an impact star, a shockwave, sparks, polygon shards,
 // tumbling bricks, dust, crumbs falling from the ceiling, the lights surging and flickering, a tier-tinted flash and a
 // colour split; from gate 5 electric arcs, from 6 embers, and at 7 gold lightning and confetti. It hits harder the
 // deeper the gate. About 200 canvas pixels on the short side, scaled up crisp by CSS.
 
 import { useEffect, useRef } from "react";
 
-import { depthAt, revealTimeline, TEMPO } from "@/lib/reveal/timeline.ts";
-import { bolt, EXIT, FOCAL, GAP, hitStopMs, HW, LEAD, settleCam, slowMo, slowSpan, tierEffects, VIEW } from "@/lib/reveal/tunnel.ts";
+import { camBack, clockRate, crackAt, depthAt, type Outcome, revealTimeline, strainAt, teaseOutcome, TEMPO } from "@/lib/reveal/timeline.ts";
+import { ballDrop, bolt, EXIT, FOCAL, GAP, hitStopMs, HW, LEAD, settleCam, tierEffects, VIEW } from "@/lib/reveal/tunnel.ts";
 import { buildSurfaces, F_DECAL, F_EMISSIVE, F_PATCH, F_PUDDLE, TPU, type Surface } from "@/lib/reveal/walls.ts";
 import { pickComposition, type SceneMeta } from "@/lib/scene/engine.ts";
 import { TIER_COLORS, TIERS } from "@/lib/tiers.ts";
@@ -165,8 +167,9 @@ async function loadStadium(w: number, h: number) {
   return { meta, px: new Uint32Array(c.getImageData(0, 0, meta.w, meta.h).data.buffer) };
 }
 
-export default function TunnelReveal({ tier, onSmash, onLanded }: {
-  tier: number; onSmash?: (gate: number, last: boolean) => void; onLanded: () => void;
+export default function TunnelReveal({ tier, outcome, onSmash, onLanded }: {
+  tier: number; outcome?: Outcome;      // break or hold at the tease: random unless given (the preview page)
+  onSmash?: (gate: number, last: boolean) => void; onLanded: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const skipRef = useRef(false);
@@ -189,14 +192,15 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     const F0 = FOCAL * W;                               // focal length: the tunnel fills the width just ahead
     const HH = (HW * H) / W;                            // a cross-section the shape of the screen
     const PX = W / 160;                                 // screen-space speeds scale with the canvas
-    const tl = revealTimeline(tier);
+    const tl = revealTimeline(tier, outcome ?? teaseOutcome(tier, Math.random()));
+    const broke = tl.outcome === "break";                // through the last gate and out, or held at the next tier's
+    const G = tl.teaseGate;
     const exitZ = tl.tier * GAP + EXIT;
-    const segOf = (z: number) => (z > tl.tier * GAP ? tl.tier : Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9))));
-    const surf = buildSurfaces({ length: exitZ + 0.6, hh: HH, gap: GAP, palette: (z) => PALETTE[segOf(z)] });
+    const segOf = (z: number) => (broke && z > tl.tier * GAP ? tl.tier : Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9))));
+    const surf = buildSurfaces({ length: (broke ? exitZ : G * GAP) + 0.6, hh: HH, gap: GAP, palette: (z) => PALETTE[segOf(z)] });
     const sign = makeSign();
-    const signZ = tl.tier * GAP - 0.55;                  // hung from the ceiling just before the last gate
-    const finalAt = tl.gates[tl.tier - 1];
-    const slowFor = slowSpan(tl);                        // timeline ms that run slow before the last gate
+    const signZ = G * GAP - 0.55;                        // hung from the ceiling just before the gate it rams
+    const FALL = HH - BALL_R - BALL_Y;                   // from the flight line down to resting on the floor
     const icons = TIERS.map((t) => Object.assign(new Image(), { src: t.icon }));
     const cracks = Array.from({ length: 8 }, makeCracks);
     const jags = Array.from({ length: 8 }, () => Array.from({ length: 22 }, () => 0.7 + Math.random() * 0.6));
@@ -209,6 +213,8 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     let t0 = performance.now();
     let last = t0;
     let smashed = 0;
+    let rammed = 0;
+    let bounced = false;
     let landed = false;
     let raf = 0;
     let F = F0;
@@ -216,7 +222,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     let shake = { amp: 0, at: 0 };
     let flash = { amp: 0, at: 0, ms: 120, c: WHITE };
     let split = { amp: 0, at: -1e9 };
-    let lastSmash: Smash = { gate: 0, at: -1e9 };
+    let lastHit = { gate: 0, at: -1e9, k: 1 };          // the last smash or ram: the ball squashes, the camera punches in
     let surge = { amp: 0, at: -1e9 };
     let arcs = { amt: 0, at: -1e9, gate: 1 };
     let burst = { amt: 0, at: -1e9 };
@@ -224,15 +230,19 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     const debris: Debris[] = [];
     const sparks: Spark[] = [];
     const smashes: Smash[] = [];
+    const rings: Smash[] = [];                          // shockwaves, on smashes and rams
     const motes: Mote[] = [];
     const bolts: Bolt[] = [];
 
     const skipToEnd = (now: number, withFlash: boolean) => {
       t0 = now - (tl.landAt + SETTLE_MS);
       smashed = tl.tier;                                  // no debris for the gates jumped over
+      rammed = tl.rams.length;
+      bounced = true;
       debris.length = 0;
       sparks.length = 0;
       smashes.length = 0;
+      rings.length = 0;
       motes.length = 0;
       bolts.length = 0;
       freezeUntil = 0;
@@ -246,17 +256,17 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
 
     /** Camera shake on every hit: the whole picture jolts and rolls, then settles; harder for deeper gates.
      *  On the element itself (compositor-only transforms), on top of the jitter inside the picture. */
-    const jolt = (gate: number, final: boolean) => {
+    const jolt = (gate: number, final: boolean, k = 1) => {
       if (reduce || !canvas.animate) return;
-      const a = 5 + gate * 1.6 + (final ? 7 : 0);             // CSS pixels
-      const r = 0.6 + gate * 0.15 + (final ? 0.9 : 0);       // degrees of roll
+      const a = (5 + gate * 1.6 + (final ? 7 : 0)) * k;       // CSS pixels
+      const r = (0.6 + gate * 0.15 + (final ? 0.9 : 0)) * k; // degrees of roll
       const at = (x: number, y: number, deg: number) => ({ transform: `translate(${x}px, ${y}px) rotate(${deg}deg) scale(1.06)` });
       canvas.animate([at(0, 0, 0), at(-a, a * 0.6, -r), at(a * 0.8, -a * 0.5, r * 0.8), at(-a * 0.45, a * 0.3, -r * 0.4),
                       at(a * 0.2, -a * 0.1, r * 0.15), at(0, 0, 0)],
                      { duration: SHAKE_MS, easing: "ease-out" });
     };
 
-    const spawn = (gate: number, t: number) => {
+    const spawn = (gate: number, t: number, big: boolean) => {
       const p = PALETTE[gate];
       const k = power(gate);
       const z = gate * GAP;
@@ -295,7 +305,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         sparks.push({ x: bx, y: by, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8, born: t, life: 140 + Math.random() * 200,
                       c: css(Math.random() < 0.5 ? WHITE : mix(p.light, WHITE, 0.3)) });
       }
-      const fx = tierEffects(gate, gate === tl.tier);
+      const fx = tierEffects(gate, big);
       for (let i = 0; i < fx.shards; i++) {                    // angular shards of the gate, spinning out
         const { x, y, dx, dy } = piece(0.6);
         const r = Math.random();
@@ -342,8 +352,67 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       smashes.push({ gate, at: t });
     };
 
-    const ballZ = (t: number) => (t <= tl.landAt ? depthAt(tl, t) * GAP : tl.tier * GAP + (t - tl.landAt) * 0.012);
-    const camZ = (t: number) => (t <= tl.landAt ? depthAt(tl, t) * GAP - LEAD : settleCam(tl.tier, (t - tl.landAt) / SETTLE_MS));
+    /** A hit that doesn't get through: chips and dust knocked off the face of the gate, a few bricks, sparks off the
+     *  ball and crumbs shaken from the ceiling. `k` scales it. */
+    const knock = (gate: number, t: number, k: number) => {
+      const p = PALETTE[gate];
+      const z = gate * GAP - 0.03;
+      const chip = (life: number, speed: number) => {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * 0.22;
+        const v = (0.5 + Math.random() * 1.6) * speed;
+        const c = Math.random() < 0.15 ? WHITE : Math.random() < 0.6 ? p.wall : p.light;
+        debris.push({ kind: "chip", x: Math.cos(a) * r, y: BALL_Y + Math.sin(a) * r, z, born: t, life, rot: 0, spin: 0, size: 0.022,
+                      vx: Math.cos(a) * v, vy: Math.sin(a) * v - Math.random() * 0.5, vz: -(0.3 + Math.random() * 1.5) * speed, c, edge: c });
+      };
+      for (let i = 0; i < Math.round(80 * k); i++) chip(900, 1);
+      for (let i = 0; i < Math.round(7 * k); i++) {                // a few bricks knocked loose, dropping off the face
+        const r = Math.random();
+        const c = r < 0.6 ? p.wall : p.stripe;
+        debris.push({ kind: "brick", x: gauss() * 0.35, y: BALL_Y + gauss() * 0.3, z, born: t, life: 1300, rot: Math.random() * 6,
+                      spin: (Math.random() - 0.5) * 14, size: 0.04 + Math.random() * 0.05, vx: gauss() * 0.6, vy: -Math.random() * 0.6,
+                      vz: -(0.4 + Math.random() * 1.2), c, edge: mix(c, BLACK, 0.55) });
+      }
+      for (let i = 0; i < Math.round(18 * k); i++) {               // a puff of dust off the point of impact
+        const a = Math.random() * Math.PI * 2;
+        debris.push({ kind: "dust", x: Math.cos(a) * 0.12, y: BALL_Y + Math.sin(a) * 0.12, z: z - 0.05, born: t,
+                      life: 600 + Math.random() * 500, rot: 0, spin: 0, size: 0.1 + Math.random() * 0.16, vx: Math.cos(a) * 0.5,
+                      vy: Math.sin(a) * 0.4 - 0.1, vz: -(0.2 + Math.random() * 0.5), c: mix(DUST, p.wall, 0.35), edge: DUST });
+      }
+      const bx = CX, by = VY + BALL_Y * (F0 / LEAD);
+      for (let i = 0; i < Math.round(30 * k); i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = (50 + Math.random() * 130) * PX * k;
+        sparks.push({ x: bx, y: by, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8, born: t, life: 120 + Math.random() * 160,
+                      c: css(Math.random() < 0.5 ? WHITE : mix(p.light, WHITE, 0.3)) });
+      }
+      const cam = camZ(t);
+      for (let i = 0; i < Math.round(16 * k); i++) {
+        debris.push({ kind: "crumb", x: (Math.random() * 2 - 1) * HW * 0.95, y: -HH + 0.02, z: cam + 0.4 + Math.random() * 2,
+                      born: t + Math.random() * 160, life: 1700, rot: 0, spin: 0, size: 0.018 + Math.random() * 0.02,
+                      vx: gauss() * 0.1, vy: Math.random() * 0.3, vz: 0, c: mix(CONCRETE, WHITE, 0.25 + Math.random() * 0.3), edge: DUST });
+      }
+    };
+
+    /** While the ball pushes: the gate crumbling under it, a chip or a spark at a time, more as the strain builds. */
+    const trickle = (t: number, dt: number, k: number) => {
+      const p = PALETTE[G];
+      const n = Math.floor(dt * (30 + 90 * k) + Math.random());
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, r = 0.08 + Math.random() * 0.2;
+        const c = Math.random() < 0.6 ? p.wall : p.light;
+        debris.push({ kind: "chip", x: Math.cos(a) * r, y: BALL_Y + Math.sin(a) * r, z: G * GAP - 0.03, born: t, life: 800,
+                      rot: 0, spin: 0, size: 0.02, vx: Math.cos(a) * 0.5, vy: 0.2 + Math.random() * 0.4, vz: -(0.2 + Math.random() * 0.6), c, edge: c });
+        if (Math.random() < 0.5) {
+          const sa = Math.random() * Math.PI * 2, v = (30 + Math.random() * 70) * PX;
+          sparks.push({ x: CX, y: VY + BALL_Y * (F0 / LEAD), vx: Math.cos(sa) * v, vy: Math.sin(sa) * v * 0.8, born: t,
+                        life: 80 + Math.random() * 120, c: css(mix(p.light, WHITE, 0.5)) });
+        }
+      }
+    };
+
+    const ballZ = (t: number) => (!broke || t <= tl.landAt ? depthAt(tl, t) * GAP : tl.tier * GAP + (t - tl.landAt) * 0.012);
+    const camZ = (t: number) => (!broke || t <= tl.landAt ? (depthAt(tl, t) - camBack(tl, t)) * GAP - LEAD
+                                                          : settleCam(tl.tier, (t - tl.landAt) / SETTLE_MS));
 
     const line = (x0: number, y0: number, x1: number, y1: number) => {
       const n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
@@ -372,7 +441,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
     /** The tunnel itself: walls, ceiling and floor, one ray per pixel (the same maths as castTunnel), up to `limit`.
      *  `surge` brightens every lamp for a moment after a smash. */
     const drawTunnel = (cam: number, limit: number, t: number, surge: number) => {
-      const open = smashed >= tl.tier;
+      const open = broke && smashed >= tl.tier;
       const lit = open ? PALETTE[tl.tier] : null;
       for (let y = 0; y < H; y++) {
         const ry = (y + 0.5 - VY) / F;
@@ -385,7 +454,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
           if (t_ > limit) { buf[i] = 0xff000000; continue; }
           const z = cam + t_;
           const zf = fract(z);
-          const beyond = z > tl.tier * GAP;                       // the stretch after the last gate: the walkout light
+          const beyond = broke && z > tl.tier * GAP;              // the stretch after the last gate: the walkout light
           const seg = Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9)));
           const p = beyond ? PALETTE[tl.tier] : PALETTE[seg];
           const pool = Math.exp(-((zf - 0.3) ** 2) / 0.03) * lampOn(Math.floor(z), t);
@@ -570,8 +639,9 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         ctx.globalAlpha = 1;
       }
       const near = gate * GAP - ballZ(t);                     // cracks spread as the ball closes in
-      if (near < CRACK_RANGE) {
-        const grow = Math.pow(1 - Math.max(0, near) / CRACK_RANGE, 1.4);
+      const close = near < CRACK_RANGE ? Math.pow(1 - Math.max(0, near) / CRACK_RANGE, 1.4) : 0;
+      const grow = gate === G ? Math.max(Math.min(close, 0.3), crackAt(tl, t)) : close;   // the tease gate: by the rams
+      if (grow > 0) {
         const ix = CX, iy = VY + BALL_Y * s;
         const dark = p.wall[0] + p.wall[1] + p.wall[2] < 120;                   // on a black gate the cracks glow instead
         ctx.fillStyle = css(mix(dark ? p.light : mix(p.stripe, BLACK, 0.7), BLACK, 1 - fog));
@@ -581,12 +651,32 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
             line(ix + crack[k][0] * s, iy + crack[k][1] * s, ix + crack[k + 1][0] * s, iy + crack[k + 1][1] * s);
         }
         if (grow > 0.55) {                                    // the gate starts to give: light leaks through the cracks
-          ctx.fillStyle = css(mix(p.light, WHITE, 0.4), Math.min(1, (grow - 0.55) * 2.2));
+          const leak = Math.min(1, (grow - 0.55) * 2.2);
+          ctx.fillStyle = css(mix(p.light, WHITE, 0.4), leak);
           for (const crack of cracks[gate]) {
             for (let k = 1; k < Math.floor((crack.length - 1) * grow); k += 2) {
               const [cx, cy] = crack[k];
               ctx.fillRect(Math.round(ix + cx * s), Math.round(iy + cy * s), 1, 1);
             }
+          }
+          if (gate === G) {                                   // the tease gate glows along its cracks, throbbing
+            const throb = bounced ? 0.75 + 0.25 * Math.sin(t * 0.006) : 0.6 + 0.4 * Math.sin(t * 0.03);
+            ctx.globalCompositeOperation = "lighter";
+            for (const [dx, a] of [[0, 0.8], [1, 0.35]] as const) {     // a bright core and a softer second pixel
+              ctx.fillStyle = css(mix(p.light, WHITE, 0.25), a * leak * throb);
+              for (const crack of cracks[gate]) {
+                const n = (crack.length - 1) * grow;
+                for (let k = 0; k < Math.floor(n); k++)
+                  line(ix + crack[k][0] * s + dx, iy + crack[k][1] * s, ix + crack[k + 1][0] * s + dx, iy + crack[k + 1][1] * s);
+              }
+            }
+            const r = Math.max(2, 0.45 * s * leak);
+            const g = ctx.createRadialGradient(ix, iy, 0, ix, iy, r);
+            g.addColorStop(0, css(mix(p.light, WHITE, 0.5), 0.5 * leak * throb));
+            g.addColorStop(1, css(p.light, 0));
+            ctx.fillStyle = g;
+            ctx.fillRect(Math.round(ix - r), Math.round(iy - r), Math.ceil(2 * r), Math.ceil(2 * r));
+            ctx.globalCompositeOperation = "source-over";
           }
         }
       }
@@ -597,11 +687,22 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       if (d < 0.05) return;
       const s = F / d;
       const r = Math.max(1.5, BALL_R * s);
-      const sq = Math.max(0, 1 - Math.abs(t - lastSmash.at) / SQUASH_MS) * power(lastSmash.gate || 1);
-      const rx = r * (1 + 0.4 * sq), ry = r * (1 - 0.3 * sq);                    // squashed flat on impact
-      const bx = CX + Math.sin(t * 0.004) * 1.2;
-      const by = VY + BALL_Y * s;
-      const spin = t * 0.018;
+      const sq = Math.max(0, 1 - Math.abs(t - lastHit.at) / SQUASH_MS) * power(lastHit.gate || 1) * lastHit.k;
+      const push = t >= tl.strain[0] && t < tl.strain[1] ? strainAt(tl, t) : 0;   // flattening against the gate
+      const rx = r * (1 + 0.4 * sq + 0.22 * push), ry = r * (1 - 0.3 * sq - 0.16 * push);   // squashed flat on impact
+      const off = tl.bounceAt === null ? 0 : t - tl.bounceAt;
+      const tt = off > 0 ? tl.bounceAt! - Math.min(off, 600) * 0.5 : t;            // after a hold it rolls back and stops
+      const bx = CX + Math.sin(tt * 0.004) * 1.2;
+      const drop = ballDrop(off, FALL);
+      const by = VY + (BALL_Y + drop) * s;                                         // and drops to the floor
+      if (drop > 0) {                                                              // its shadow, darker as it lands
+        const near = drop / FALL;
+        ctx.fillStyle = css(BLACK, 0.45 * near * near);
+        ctx.beginPath();
+        ctx.ellipse(Math.round(bx), Math.round(VY + HH * s), r * (0.7 + 0.4 * near), Math.max(1, r * 0.28), 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const spin = tt * 0.018;
       const cos = Math.cos(spin), sin = Math.sin(spin);
       const seg = Math.min(7, Math.max(1, Math.ceil(z / GAP - 1e-9)));
       const rim = PALETTE[seg].light;
@@ -646,40 +747,65 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       if (skipRef.current && !landed) { skipRef.current = false; skipToEnd(now, true); }
       const frozen = now < freezeUntil;                       // hit-stop: time stands still for a beat
       if (frozen) t0 += now - last;
-      else if (!reduce && smashed === tl.tier - 1) {          // slow motion as the ball reaches the last gate
-        const rate = slowMo(tl.tier, now - t0, finalAt, slowFor);
+      else if (!reduce) {                                     // slow motion while the ball pushes against the gate
+        const rate = clockRate(tl, now - t0);
         if (rate < 1) t0 += (now - last) * (1 - rate);
       }
       const t = now - t0;
-      const slow = smashed === tl.tier - 1 ? Math.max(0, Math.min(1, 1 - (finalAt - t) / slowFor)) : 0;
+      const slow = strainAt(tl, t);
       const dt = frozen ? 0 : Math.min(0.05, (now - last) / 1000);
       last = now;
 
       while (smashed < tl.tier && t >= tl.gates[smashed]) {
         smashed += 1;
         const final = smashed === tl.tier;
-        spawn(smashed, t);
-        lastSmash = { gate: smashed, at: t };
-        shake = { amp: 2 + smashed * 0.9 + (final ? 4 : 0), at: t };
-        jolt(smashed, final);
+        const big = final && broke;                       // the climax: through the last gate and out
+        spawn(smashed, t, big);
+        lastHit = { gate: smashed, at: t, k: 1 };
+        rings.push({ gate: smashed, at: t });
+        shake = { amp: 2 + smashed * 0.9 + (big ? 4 : 0), at: t };
+        jolt(smashed, big);
         const tint = mix(PALETTE[smashed].light, WHITE, 0.55);
-        flash = final ? { amp: 0.72, at: t, ms: 420 / TEMPO, c: tint } : { amp: 0.36, at: t, ms: 90 / TEMPO, c: tint };   // the big smash shows through
-        surge = { amp: 0.35 + 0.08 * smashed + (final ? 0.25 : 0), at: t };
-        burst = { amt: power(smashed) * (final ? 1.5 : 0.8), at: t };
-        star = { amt: power(smashed) * (final ? 1.3 : 0.75), at: t, c: mix(PALETTE[smashed].light, WHITE, 0.4) };
-        split = { amp: 1 + power(smashed) + (final ? 1 : 0), at: t };
-        if (!reduce) freezeUntil = now + hitStopMs(smashed, final);
+        flash = big ? { amp: 0.72, at: t, ms: 420 / TEMPO, c: tint } : { amp: 0.36, at: t, ms: 90 / TEMPO, c: tint };   // the big smash shows through
+        surge = { amp: 0.35 + 0.08 * smashed + (big ? 0.25 : 0), at: t };
+        burst = { amt: power(smashed) * (big ? 1.5 : 0.8), at: t };
+        star = { amt: power(smashed) * (big ? 1.3 : 0.75), at: t, c: mix(PALETTE[smashed].light, WHITE, 0.4) };
+        split = { amp: 1 + power(smashed) + (big ? 1 : 0), at: t };
+        if (!reduce) freezeUntil = now + hitStopMs(smashed, big);
         callbacks.current.onSmash?.(smashed, final);
       }
+      while (rammed < tl.rams.length && t >= tl.rams[rammed]) {   // the tease: the gate takes the hit and stands
+        rammed += 1;
+        const k = rammed === 1 ? 0.7 : 1;                  // the second ram hits harder
+        knock(G, t, k);
+        lastHit = { gate: G, at: t, k: 0.8 * k };
+        rings.push({ gate: G, at: t });
+        shake = { amp: (1.5 + G * 0.6) * k, at: t };
+        jolt(G, false, 0.65 * k);
+        flash = { amp: 0.22 * k, at: t, ms: 80 / TEMPO, c: mix(PALETTE[G].light, WHITE, 0.6) };
+        star = { amt: power(G) * 0.55 * k, at: t, c: mix(PALETTE[G].light, WHITE, 0.4) };
+        if (!reduce) freezeUntil = now + hitStopMs(G, false) * (rammed === 1 ? 1.2 : 1.6);
+      }
+      if (!bounced && tl.bounceAt !== null && t >= tl.bounceAt) {   // it holds: the ball bounces off for good
+        bounced = true;
+        knock(G, t, 1.2);
+        lastHit = { gate: G, at: t, k: 1 };
+        shake = { amp: 2.5 + G * 0.7, at: t };
+        jolt(G, false, 0.9);
+        surge = { amp: 0.3, at: t };
+        flash = { amp: 0.3, at: t, ms: 180 / TEMPO, c: BLACK };    // the lights dip
+        if (!reduce) freezeUntil = now + 90;
+      }
+      if (!frozen && t >= tl.strain[0] && t < tl.strain[1]) trickle(t, dt, slow);
       if (!landed && t >= tl.landAt + LANDED_DELAY_MS) {
         landed = true;
         callbacks.current.onLanded();
       }
 
-      const pu = (t - lastSmash.at) / PUNCH_MS;                                     // camera punch-in on impact
-      F = F0 * (1 + (pu >= 0 && pu < 1 ? 0.16 * power(lastSmash.gate || 1) * (1 - pu) * (1 - pu) : 0) + 0.1 * slow * slow);
+      const pu = (t - lastHit.at) / PUNCH_MS;                                       // camera punch-in on impact
+      F = F0 * (1 + (pu >= 0 && pu < 1 ? 0.16 * power(lastHit.gate || 1) * lastHit.k * (1 - pu) * (1 - pu) : 0) + 0.1 * slow * slow);
       const cam = camZ(t);
-      const open = smashed >= tl.tier;                     // the last gate is down: the stadium beyond
+      const open = broke && smashed >= tl.tier;            // the last gate is down: the stadium beyond
       const wallZ = open ? exitZ : (smashed + 1) * GAP;
 
       const su = (t - surge.at) / SURGE_MS;               // the lights surge, then stutter, after a smash
@@ -694,7 +820,8 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
         drawGate(sm.gate, sm.gate * GAP, cam, (0.3 + 1.9 * (1 - (1 - u) * (1 - u))) * HW);
       }
 
-      const s = shake.amp * Math.max(0, 1 - (t - shake.at) / SHAKE_MS);
+      const tremble = t >= tl.strain[0] && t < tl.strain[1] ? 0.5 + 1.3 * slow : 0;   // the gate shudders under the push
+      const s = shake.amp * Math.max(0, 1 - (t - shake.at) / SHAKE_MS) + tremble;
       const ox = frozen ? 0 : Math.round((Math.random() * 2 - 1) * s), oy = frozen ? 0 : Math.round((Math.random() * 2 - 1) * s);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = "#000";
@@ -737,10 +864,12 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       const bz = ballZ(t);
       if (bz < cam + VIEW && bz <= wallZ + (open ? 30 : 0)) drawBall(bz, cam, t);
 
-      for (const sm of smashes) {                         // shockwave rings, two of them, the second thinner
+      for (let i = rings.length - 1; i >= 0; i--) {       // shockwave rings, two of them, the second thinner
+        const sm = rings[i];
         const u = (t - sm.at) / RING_MS;
         const d = sm.gate * GAP - cam;
-        if (u >= 1 || d <= 0.06) continue;
+        if (u >= 1) { rings.splice(i, 1); continue; }
+        if (d <= 0.06) continue;
         const sc = F / d;
         const cy = VY + BALL_Y * sc;
         for (const [lag, wdt] of [[0, 2], [0.18, 1]] as const) {
@@ -878,7 +1007,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
 
       if (!open) {                                         // speed lines, more of them the faster we go, in the tunnel's light
         const speed = (depthAt(tl, t + 16) - depthAt(tl, t)) * GAP;
-        const n = frozen ? 0 : Math.round(speed * 70);
+        const n = frozen ? 0 : Math.max(0, Math.round(speed * 70));
         const seg = Math.min(7, Math.max(1, Math.ceil(cam / GAP + 1e-9)));
         ctx.fillStyle = css(mix(PALETTE[seg].light, WHITE, 0.6), 0.4);
         for (let i = 0; i < n; i++) {
@@ -926,7 +1055,7 @@ export default function TunnelReveal({ tier, onSmash, onLanded }: {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKey);
     };
-  }, [tier]);
+  }, [tier, outcome]);
 
   return (
     <canvas ref={canvasRef} className="tunnel" width={160} height={100} onPointerDown={() => { skipRef.current = true; }}
