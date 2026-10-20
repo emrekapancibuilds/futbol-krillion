@@ -4,12 +4,13 @@
 // Shape: a few blank cards, then a symmetrical bell of totals, centered on the chart (a skew-normal with shape 0, so
 // a plain normal). The user wanted it close to symmetrical (2026-10-11) and centered (2026-10-16).
 //
-// Calibration (user, 2026-10-16: "a bit stricter: 500 should be about the 95th percentile, and the curve centered"):
-// the middle of the field is 300, 500 is the 95th percentile (300 + 1.645 x 121.6), 200 -> 20%, 400 -> 80%, and the
-// 99th percentile starts near 583. The x axis runs 0..600 (twice the middle), so the peak sits in the middle of the
-// chart; only a score past the axis stretches it. History: 1,260 was 95.8% on the old 10 ... 1,000 ladder, then 252 on
-// the 5 ... 200 ladder (2026-10-14); that bell sat on the left of the chart. Each day stretches the bell sideways a
-// little (DAY_STRETCH) so days differ without moving those marks far.
+// Calibration (user, 2026-10-20: "make the curve a lot harder, so it's super hard to get 95+ percentile"): the middle
+// of the field is 500 and 800 is the 95th percentile (500 + 1.645 x 182.4): seven straight correct answers averaging
+// about 85 points (mostly True Analyst and Insane) plus the 210 streak bonus. 300 -> about 16%, 400 -> 31%, 600 -> 72%,
+// 700 -> 87%, and the 99th percentile starts near 920. The x axis runs 0..1,000 (twice the middle), so the peak sits in
+// the middle of the chart; only a score past the axis stretches it. History: 1,260 was 95.8% on the old 10 ... 1,000
+// ladder, then 252 on the 5 ... 200 ladder (2026-10-14), then 500 with the middle at 300 (2026-10-16). Each day
+// stretches the bell sideways a little (DAY_STRETCH) so days differ without moving those marks far.
 
 export type Standings = {
   players: number;      // field size, 10,000-20,000
@@ -21,11 +22,11 @@ export type Standings = {
 const BINS = 112;           // columns across the axis (56 looked too chunky: user, 2026-10-14)
 const BLANK_SHARE = 0.03;   // players who scored nothing
 const SKEW = 0;             // skew-normal shape: 0 is a perfect bell, higher leans right
-const LOCATION = 300;       // the middle of the field and its spread, in points, for an average day
-const SCALE = 121.6;
+const LOCATION = 500;       // the middle of the field and its spread, in points, for an average day
+const SCALE = 182.4;
 const DAY_STRETCH = 0.02;   // each day is this much wider or narrower than average, at most
 const STEPS = 600;          // numeric integration steps over 0..TOP
-const TOP = 1400;           // integrate over 0..TOP points (the tail beyond is negligible)
+const TOP = 1610;           // integrate over 0..TOP points: a perfect set (MAX_SCORE); the tail beyond is nil
 
 /** Same seed (a daily's number, or an Unlimited round type and set), same field. */
 export function mockStandings(seed: string, score: number): Standings {
