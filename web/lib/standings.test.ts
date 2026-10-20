@@ -13,42 +13,43 @@ test("the mock field has 10,000-20,000 players and stays the same for the same g
 });
 
 test("a higher score beats more players; nothing is 0% or 100% unless it has to be", () => {
-  const p = [0, 60, 150, 300, 450, 700, 1400].map((score) => mockStandings("daily:7", score).percentile);
+  const p = [0, 60, 150, 300, 500, 800, 1400].map((score) => mockStandings("daily:7", score).percentile);
   for (let i = 1; i < p.length; i++) assert.ok(p[i] >= p[i - 1], `${p}`);
   assert.ok(p[0] <= 3);                 // a blank card: only the other blanks are behind you
-  assert.ok(p[3] > 40 && p[3] < 60);    // 300 is the middle of the field
+  assert.ok(p[4] > 40 && p[4] < 60);    // 500 is the middle of the field
   assert.equal(p[6], 99);               // never "better than 100%"
 });
 
-// User, 2026-10-16: "make the curve a bit stricter: 500 should be about the 95th percentile, and the curve should be
-// centered." (It was 252 = 95.8%, a bell piled up on the left of the chart.)
+// User, 2026-10-20: "make the curve a lot harder, so it's super hard to get 95+ percentile." 800 is now the 95th
+// percentile (it was 500, after 252 before that), and the bell stays symmetric and centered (2026-10-16).
 const DAYS = Array.from({ length: 80 }, (_, i) => (i % 2 ? `daily:${i}` : `unlimited:mixed:${i}`));
 const pct = (score: number) => DAYS.map((seed) => mockStandings(seed, score).percentile);
 
-test("500 is about the 95th percentile, on every day", () => {
-  const p = pct(500);
+test("800 is about the 95th percentile, on every day: 95+ takes seven straight rare answers", () => {
+  const p = pct(800);
   assert.ok(Math.min(...p) >= 93 && Math.max(...p) <= 97, `${Math.min(...p)}..${Math.max(...p)}`);
   const mean = p.reduce((a, b) => a + b, 0) / p.length;
   assert.ok(mean >= 94.3 && mean <= 95.8, `mean ${mean}`);
 });
 
-test("the middle of the field is 300, with 200 well below and 400 well above", () => {
+test("the middle of the field is 500: a typical 300 is well below it and 700 well above", () => {
   const med = (score: number) => pct(score).sort((a, b) => a - b)[40];
-  assert.ok(med(300) >= 45 && med(300) <= 55, `${med(300)}`);
-  assert.ok(med(200) >= 15 && med(200) <= 27, `${med(200)}`);
-  assert.ok(med(400) >= 75 && med(400) <= 87, `${med(400)}`);
+  assert.ok(med(500) >= 45 && med(500) <= 55, `${med(500)}`);
+  assert.ok(med(300) >= 10 && med(300) <= 22, `${med(300)}`);
+  assert.ok(med(400) >= 25 && med(400) <= 37, `${med(400)}`);
+  assert.ok(med(700) >= 80 && med(700) <= 92, `${med(700)}`);
 });
 
-test("the 99th percentile only starts around 600: never below 550, always from 650", () => {
+test("the 99th percentile only starts around 920: never below 880, always from 960", () => {
   for (const seed of DAYS) {
-    assert.ok(mockStandings(seed, 550).percentile < 99, `${seed} reached 99 at 550`);
-    assert.equal(mockStandings(seed, 650).percentile, 99, `${seed} below 99 at 650`);
+    assert.ok(mockStandings(seed, 880).percentile < 99, `${seed} reached 99 at 880`);
+    assert.equal(mockStandings(seed, 960).percentile, 99, `${seed} below 99 at 960`);
   }
 });
 
 test("the bell is centered: its peak sits in the middle of the chart and the two sides match", () => {
   for (const seed of DAYS.slice(0, 20)) {
-    const { curve } = mockStandings(seed, 300);
+    const { curve } = mockStandings(seed, 500);
     const peak = curve.indexOf(Math.max(...curve));
     assert.ok(peak >= curve.length * 0.42 && peak <= curve.length * 0.58, `${seed}: peak at bin ${peak} of ${curve.length}`);
     let left = peak, right = peak;
@@ -62,8 +63,9 @@ test("the bell is centered: its peak sits in the middle of the chart and the two
 
 test("a typical score keeps the centered axis; only a score beyond it stretches the axis", () => {
   for (const seed of DAYS.slice(0, 10)) {
-    assert.ok(mockStandings(seed, 300).max <= 650, `${mockStandings(seed, 300).max}`);
-    assert.ok(mockStandings(seed, 300).max >= 550);
+    assert.ok(mockStandings(seed, 300).max <= 1050, `${mockStandings(seed, 300).max}`);
+    assert.ok(mockStandings(seed, 300).max >= 950);
+    assert.equal(mockStandings(seed, 800).max, mockStandings(seed, 300).max);
   }
   const s = mockStandings("daily:3", 1360);
   assert.ok(s.max >= 1360 && s.max % 50 === 0);
@@ -75,8 +77,8 @@ test("the curve is drawn with many fine columns, not a few chunky ones (user, 20
   assert.ok(curve.every((v) => v >= 0 && v <= 1));
 });
 
-test("the curve still reaches past 500, so the marker doesn't sit past the end of the curve", () => {
-  const s = mockStandings("daily:4", 500);
+test("the curve still reaches past 800, so the marker doesn't sit past the end of the curve", () => {
+  const s = mockStandings("daily:4", 800);
   const lastTall = s.curve.reduce((acc, v, i) => (v > 0.02 ? i : acc), 0);       // last bar above 2% of the peak
-  assert.ok(((lastTall + 1) / s.curve.length) * s.max > 500, `curve ends at ${((lastTall + 1) / s.curve.length) * s.max}`);
+  assert.ok(((lastTall + 1) / s.curve.length) * s.max > 800, `curve ends at ${((lastTall + 1) / s.curve.length) * s.max}`);
 });
