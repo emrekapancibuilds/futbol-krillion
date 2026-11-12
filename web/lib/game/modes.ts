@@ -1,9 +1,10 @@
 import 'server-only';
+// Practice, the daily archive and Unlimited: free for everyone (owner, 2026-11-12: "get rid of payments").
+// Practice and archive games are stored per browser, so their round tokens are signed for that browser and game.
 import { createHmac, randomInt } from 'node:crypto';
-import { checked, db, withLock } from '../billing/db.ts';
-import { requirePremium } from '../billing/service.ts';
-import { visitor } from '../billing/session.ts';
-import { HttpError, uuid } from '../billing/security.ts';
+import { checked, db, withLock } from '../server/db.ts';
+import { visitor } from '../server/session.ts';
+import { HttpError, uuid } from '../server/security.ts';
 import { gameData, gameSecret, promptIds, snapshotDate } from './server.ts';
 import { dayFor, type Day, type GameData } from './engine.ts';
 
@@ -16,7 +17,6 @@ export function selectPractice(pool: string[], recent: string[], count = 7) {
   return result;
 }
 export async function createGame(visitorId: string, mode: unknown, day: unknown) {
-  await requirePremium(visitorId);
   return withLock(`game:${visitorId}`, async () => {
     const data = gameData();
     let selection: Day;
@@ -37,24 +37,21 @@ export async function createGame(visitorId: string, mode: unknown, day: unknown)
 export async function roundContext(req: Request, body: Record<string, unknown>): Promise<{ data: GameData; secret: string }> {
   if (typeof body.prompt === 'string') {
     if (body.gameId != null || body.day != null || body.round != null) throw new HttpError(400, 'Ambiguous round.');
-    return unlimitedContext(req);
+    return unlimitedContext();
   }
   if (body.gameId === undefined || body.gameId === null) return { data: gameData(), secret: gameSecret() };
   if (!uuid(body.gameId)) throw new HttpError(400, 'Invalid game.');
   const session = await visitor(req, false);
-  if (!session) throw new HttpError(402, 'Restore Purchase or upgrade to Unlimited.');
-  await requirePremium(session.id);
+  if (!session) throw new HttpError(404, 'Game not found in this browser.');
   const row = await checked(db().from('fk_games').select('*').eq('id', body.gameId).eq('visitor_id', session.id).maybeSingle());
   if (!row || row.day_number !== body.day) throw new HttpError(404, 'Game not found in this browser.');
   const data = gameData();
   return { data: { ...data, days: [{ number: row.day_number, date: '', prompts: row.prompts }] },
+    // The 'premium:' label predates free play; renaming it would void every practice or archive game in progress.
     secret: createHmac('sha256', gameSecret()).update(`premium:${session.id}:${row.id}`).digest('hex') };
 }
 
-/** Every prompt-based operation verifies current access and signs for this browser owner. */
-export async function unlimitedContext(req: Request) {
-  const session = await visitor(req, false);
-  if (!session) throw new HttpError(402, 'Restore Purchase or upgrade to Unlimited.');
-  await requirePremium(session.id);
-  return { data: gameData(), secret: createHmac('sha256', gameSecret()).update(`unlimited:${session.id}`).digest('hex') };
+/** Unlimited needs no session: anyone can play. Its tickets use their own key, so they are never valid for a daily. */
+export function unlimitedContext() {
+  return { data: gameData(), secret: createHmac('sha256', gameSecret()).update('unlimited').digest('hex') };
 }

@@ -1,7 +1,7 @@
 import { passRound } from "@/lib/game/engine.ts";
 import { body, json, slotFrom } from "@/lib/game/http.ts";
-import { roundContext } from "@/lib/game/premium.ts";
-import { assertSameOrigin, HttpError } from "@/lib/billing/security.ts";
+import { roundContext } from "@/lib/game/modes.ts";
+import { assertSameOrigin, HttpError } from "@/lib/server/security.ts";
 
 export const dynamic = "force-dynamic";
 

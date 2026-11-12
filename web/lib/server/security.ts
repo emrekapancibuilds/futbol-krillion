@@ -8,11 +8,6 @@ export const credential = () => randomBytes(32).toString('base64url');
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export const validCredential = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{43}$/.test(value);
 export const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(value);
-export function normalizeEmail(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
-    throw new HttpError(400, 'Enter a valid email address.');
-  return value.trim().toLowerCase();
-}
 export function appUrl(): string {
   const url = new URL(process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000');
   if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') throw new Error('HTTPS APP_URL required');

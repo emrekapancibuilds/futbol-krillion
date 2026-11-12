@@ -12,7 +12,14 @@ const config: NextConfig = {
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "X-Frame-Options", value: "DENY" },
-    ] }, { source: "/billing/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] }];
+    ] }];
+  },
+  // Futkrill is free (owner, 2026-11-12): old payment links from emails and receipts land somewhere useful.
+  async redirects() {
+    return [
+      { source: "/refunds", destination: "/terms", permanent: true },
+      { source: "/billing/:path*", destination: "/unlimited", permanent: true },
+    ];
   },
   // The game data (answers, name index) is read from disk by the API routes and must ship with them.
   outputFileTracingIncludes: { "/api/**": ["./data/**"] },

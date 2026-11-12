@@ -1,6 +1,6 @@
 "use client";
 
-// "Today's daily" card for subscribers on /unlimited: a live countdown to the next daily, like the one at the end of
+// "Today's daily" card on /unlimited: a live countdown to the next daily, like the one at the end of
 // the daily, plus a way into today's daily while it's still unplayed.
 
 import { motion } from "framer-motion";

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
-// Describes this purchase build. Review before publishing a production deployment.
+// Describes the free game (payments removed 2026-11-12). Keep it in step with what the code really does.
 export const metadata: Metadata = {
   title: "Privacy · Futkrill",
   description: "What Futkrill keeps on your device and what reaches our server.",
@@ -10,12 +10,11 @@ export const metadata: Metadata = {
 export default function Privacy() {
   const mail = <Mail />;
   return (
-    <LegalPage title="Privacy" effective="October 12, 2026">
+    <LegalPage title="Privacy" effective="November 12, 2026">
       <p>
-        Futkrill offers a free daily football trivia game and optional paid Unlimited access. Your scores
-        stay in your browser. Purchase access uses an essential session cookie, Stripe payment records and
-        Supabase. If you lose access, you email us and we restore it. The game runs no
-        advertising or analytics trackers.
+        Futkrill is a free football trivia game: the daily, Unlimited, practice and the daily archive. Your scores
+        stay in your browser. Practice and archive games use an essential session cookie and are stored on our
+        server so the rounds belong to your browser. The game runs no advertising or analytics trackers.
       </p>
       <p>The details follow.</p>
 
@@ -42,17 +41,17 @@ export default function Privacy() {
       </ul>
       <p>
         Rounds are tracked with a signed ticket that your browser holds and sends back. It says which round
-        you&apos;re playing and when your time runs out. Paid rounds are also tied to an anonymous browser session.
-        We store purchase and game-session records needed to enforce paid access, but do not store
-        a history of the answers you type or sync your scores.
+        you&apos;re playing and when your time runs out. Practice and archive rounds are also tied to an anonymous
+        browser session: we store which game you started and its prompts, but not a history of the answers you type,
+        and we don&apos;t sync your scores.
       </p>
 
       <h2>Cookies</h2>
       <p>
-        We set an essential HttpOnly session cookie to recognize your browser for purchases and paid play. Only a
-        hash of its random credential is stored in the database. Clearing the cookie removes this browser&apos;s
-        access until we restore it for you (if you lose access, email {mail} from your payment address). Stripe may use its own cookies on
-        its hosted payment and receipt pages.
+        We set an essential HttpOnly session cookie when you start a practice or archive game, so its rounds stay
+        with your browser. Only a hash of its random credential is stored in the database. Clearing the cookie ends
+        any practice or archive game in progress; nothing else depends on it. The daily and Unlimited need no
+        cookie.
       </p>
 
       <h2>Analytics and ads</h2>
@@ -77,24 +76,24 @@ export default function Privacy() {
         for marketing. The app uses hashed rate-limit identifiers, including IP-derived values, to limit abuse.
       </p>
 
-      <h2>Payments and email verification</h2>
+      <h2>Where server-side records live</h2>
       <p>
-        Stripe processes card payments and stores the payment details. Our server keeps Stripe customer and
-        purchase and payment identifiers, the payment email, purchase status and purchase dates. It does not store
-        your full card number. Stripe handles this information under its{' '}
-        <a href="https://stripe.com/privacy">privacy policy</a>.
+        Supabase stores the anonymous browser sessions and the practice and archive games described above.
       </p>
+
+      <h2>Earlier purchases</h2>
       <p>
-        Supabase stores the records used for browser sessions and purchase access. If you lose access, email {mail}
-        from the address you paid with: we check it against the payment in Stripe and restore access to your
-        browser. Restoring does not bring back local scores or streaks.
+        Until November 12, 2026, Unlimited was a paid unlock. We still hold the records from those purchases: Stripe
+        customer and payment identifiers, the payment email, purchase status and purchase dates. We never stored card
+        numbers. Stripe keeps the payment details under its{' '}
+        <a href="https://stripe.com/privacy">privacy policy</a>. Futkrill no longer takes payments. Email {mail} to ask
+        about these records or have them deleted.
       </p>
 
       <h2>Your data, your call</h2>
       <p>
-        Clear the site&apos;s browser data to erase local progress and its session cookie. This does not cancel a
-        purchase or delete server-side payment and verification records.
-        Contact {mail} for questions or requests about server-side information.
+        Clear the site&apos;s browser data to erase local progress and its session cookie. Contact {mail} for
+        questions or requests about server-side information.
       </p>
 
       <h2>Children</h2>

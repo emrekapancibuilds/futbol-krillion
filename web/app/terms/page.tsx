@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import LegalPage, { Mail } from "@/components/LegalPage.tsx";
 
-// Factual billing descriptions updated for this build; review before a production launch.
+// The game is free (payments removed 2026-11-12). Keep this in step with what the site really does.
 export const metadata: Metadata = {
   title: "Terms · Futkrill",
   description: "The rules for playing Futkrill.",
@@ -12,18 +12,18 @@ export const metadata: Metadata = {
 export default function Terms() {
   const mail = <Mail />;
   return (
-    <LegalPage title="Terms" effective="October 12, 2026">
+    <LegalPage title="Terms" effective="November 12, 2026">
       <p>
         These terms cover your use of Futkrill, the football trivia game at futkrill.com. By
         playing, you agree to them. The short version: play fair, have fun, and don&apos;t treat the answer lists as
-        gospel. The daily game is free; optional paid access is described below.
+        gospel. The whole game is free.
       </p>
 
       <h2>The game</h2>
       <p>
-        The daily game is free to play, with no account needed. A new daily goes live at 00:00 UTC. Unlimited
-        practice and the daily archive require paid access. We may change any part of the game at any time, including prompts, answers, scoring and
-        features, and we may pause it or stop running it.
+        Everything is free to play, with no account needed: the daily, Unlimited, practice and the daily archive. A
+        new daily goes live at 00:00 UTC. We may change any part of the game at any time, including prompts, answers,
+        scoring and features, and we may pause it or stop running it.
       </p>
 
       <h2>Play fair</h2>
@@ -63,18 +63,10 @@ export default function Terms() {
         answer lists to use elsewhere.
       </p>
 
-      <h2>Unlimited purchase</h2>
+      <h2>Earlier purchases</h2>
       <p>
-        Unlimited costs $7.99 USD as a one-time payment, with no recurring charges. Applicable taxes are displayed
-        at Checkout. Stripe handles payment. Your purchase unlocks Unlimited practice and the daily archive
-        for as long as the game is available. A fully refunded payment no longer grants access; access may be
-        suspended while a payment is disputed. Refunds follow our <Link href="/refunds">refund policy</Link>: in short, a full
-        refund within 14 days, no questions asked.
-      </p>
-      <p>
-        Access is recognized in the purchasing browser. If you lose access or want it on another device, email{" "}
-        {mail} from the address you paid with and we&apos;ll restore it. Restoring brings back paid access, not local
-        scores or streaks.
+        Unlimited used to be a paid unlock. Since November 12, 2026 it&apos;s free for everyone, and Futkrill takes no
+        payments. Questions about an earlier purchase: email {mail}.
       </p>
 
       <h2>No guarantees</h2>
@@ -87,7 +79,7 @@ export default function Terms() {
       <p>
         To the extent the law allows, we aren&apos;t liable for indirect or consequential losses, or for lost progress,
         streaks or scores, that come from using the game. If we are ever found liable to you, our total liability is
-        limited to what you paid us to use it. None of this limits rights you have under
+        limited to what you paid us to use it, if anything. None of this limits rights you have under
         consumer law that can&apos;t be waived.
       </p>
 

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import PremiumGame from "@/components/PremiumGame";
+import Game from "@/components/Game";
 
 export const metadata: Metadata = { title: "Futkrill Unlimited" };
 
 export default function Play() {
-  return <PremiumGame mode="unlimited" />;
+  return <Game mode="unlimited" />;
 }

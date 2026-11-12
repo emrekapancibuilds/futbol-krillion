@@ -11,7 +11,7 @@ export function endpoint(fn: (req: Request, session: Visitor, body: Record<strin
       session = await visitor(req);
       return json(await fn(req, session!, body), 200, session?.cookie);
     } catch (error) {
-      if (!(error instanceof HttpError)) console.error('billing_request_failed', { name: error instanceof Error ? error.name : 'Unknown' });
+      if (!(error instanceof HttpError)) console.error('request_failed', { name: error instanceof Error ? error.name : 'Unknown' });
       return json({ error: error instanceof HttpError ? error.message : 'Unable to complete this request. Please try again.' },
         error instanceof HttpError ? error.status : 503, session?.cookie);
     }
