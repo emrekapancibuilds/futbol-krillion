@@ -21,9 +21,9 @@
       "permanent": true
     },
     {
-      "source": "/:path((?!api/stripe/webhook$).+)",
+      "source": "/:path+",
       "has": [{ "type": "host", "value": "futkrill.vercel.app" }],
-      "destination": "https://futkrill.com/:path",
+      "destination": "https://futkrill.com/:path+",
       "permanent": true
     }
   ]

@@ -1,6 +1,6 @@
 import { dayFor, type Slot } from "./engine.ts";
 import { gameData } from "./server.ts";
-import { readBody } from "../billing/security.ts";
+import { readBody } from "../server/security.ts";
 
 export const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });

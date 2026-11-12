@@ -17,7 +17,6 @@ import { MAX_SCORE, TIER_COLORS, tierInfo } from "@/lib/tiers.ts";
 import RoundColumns from "./RoundColumns.tsx";
 import Standing from "./Standing.tsx";
 import { StreakBadge, StreakLost } from "./Streak.tsx";
-import { billingSession } from "./SubscriptionPanel";
 import TunnelReveal from "./TunnelReveal.tsx";
 
 type DayInfo = { number: number; date: string; rounds: number; nextAt: string; snapshot: string; gameId?: string; mode?: string };
@@ -99,7 +98,6 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
   const react = (status: Result["status"], tier: number | null) => setMood(crowdReaction(status, tier));
 
   useEffect(() => {
-    void billingSession().catch(() => {});
     if (archive) {
       try {
         const selected = JSON.parse(sessionStorage.getItem("fk:archive") ?? "null");
@@ -328,7 +326,7 @@ export default function Game({ mode = "daily" }: { mode?: Mode }) {
         )}
       </AnimatePresence>
 
-      {day && <footer className="small">{unlimited ? "Unlimited · " : ""}Data as of {day.snapshot} · new daily at 00:00 UTC · <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link> · <Link href="/refunds">Refunds</Link></footer>}
+      {day && <footer className="small">{unlimited ? "Unlimited · " : ""}Data as of {day.snapshot} · new daily at 00:00 UTC · <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link></footer>}
     </main>
   );
 }

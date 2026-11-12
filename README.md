@@ -1,8 +1,8 @@
 # Futkrill
 
-A football trivia game with a shared free daily, 30-second rounds, rarity scoring, pixel-art reveals and optional Unlimited access.
+A free football trivia game with a shared daily, 30-second rounds, rarity scoring, pixel-art reveals, Unlimited sets and a daily archive.
 
-- `web/`: Next.js application, Stripe one-time purchases, Supabase email verification and database migrations.
+- `web/`: Next.js application and the Supabase migrations for practice and archive games.
 - `pipeline/`: Python football-data preparation and prompt generation.
 - `art/`: Artwork generation source.
 
@@ -17,11 +17,11 @@ cp .env.example .env.development.local
 npm run dev -- --port 3100
 ```
 
-Fill local environment values from your own sandbox configuration. Never commit credentials. The daily remains available without billing configuration. See [web setup](web/README.md) for Stripe, Supabase and email settings.
+Fill local environment values from your own configuration. Never commit credentials. The daily and Unlimited work without a database; practice and the archive need Supabase. See [web setup](web/README.md).
 
 ## Working with Claude Code and Codex
 
-Use a separate clone or Git worktree for each coding agent. Start each change from the latest `main` on a separate branch, such as `claude/gameplay` or `codex/billing`. Open pull requests and review changes before merging. Do not have two agents edit the same checkout or push over each other's branch.
+Use a separate clone or Git worktree for each coding agent. Start each change from the latest `main` on a separate branch, such as `claude/gameplay` or `codex/archive`. Open pull requests and review changes before merging. Do not have two agents edit the same checkout or push over each other's branch.
 
 ```sh
 git clone https://github.com/emrekapancibuilds/futbol-krillion.git
@@ -29,21 +29,13 @@ cd futbol-krillion
 git switch -c claude/gameplay
 ```
 
-The repository contains source and public game data only. Runtime credentials, local billing records, database dumps and internal handoff reports stay outside Git. A new clone needs its own ignored environment file.
+The repository contains source and public game data only. Runtime credentials, database dumps and internal handoff reports stay outside Git. A new clone needs its own ignored environment file.
 
 ## Current behavior
 
-This version uses a $4.99 USD one-time Stripe purchase. Supabase verifies the checkout email when restoring a purchase; it creates a passwordless Auth identity only when that flow is requested. Browser progress stays local. Stripe payment status and server-side ownership determine paid access.
+Everything is free: the daily, Unlimited, practice and the daily archive. The owner removed payments on November 12, 2026 (Stripe, the unlock pitch, restore and the refund page are gone; `/refunds` and `/billing/*` redirect). Browser progress stays local. Practice and archive games are stored per anonymous browser session in Supabase. The database still holds the purchase records from the paid period (`fk_purchases` and related tables); nothing reads them any more.
 
-The public repository is not an automatic production deployment. Local sandbox verification has covered Checkout, paid access, receipts, refunds and webhook replay. Supabase's default email sender is suitable only for project-team testing; configure custom SMTP before emailing real customers or branding emails.
-
-## Parallel work branches
-
-- `main`: one-time $4.99 Unlimited purchase with Supabase verified-email restoration.
-- `codex/one-time-unlimited`: conversion from the earlier monthly test implementation.
-- `claude/one-time-unlock`: preserved historical Claude experiment. Its email-only restoration is not secure; do not merge its backend into the app.
-
-The owner selected the one-time model on October 12, 2026. Start new Claude work from the latest `main` on a fresh `claude/<task>` branch. The personal note from the experiment has been integrated without replacing verified-email restoration.
+The public repository is not an automatic production deployment. Start new Claude work from the latest `main` on a fresh `claude/<task>` branch.
 
 ## Validation
 

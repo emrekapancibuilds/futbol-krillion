@@ -4,12 +4,11 @@ Read `README.md`, `web/README.md`, and `web/AGENTS.md` before editing the app.
 
 - Use a separate clone/worktree and a branch for each agent. Do not edit another agent's checkout.
 - Fetch `origin/main` before starting. Open a pull request; do not force-push shared branches.
-- Keep the free daily, original gameplay and local stats working when changing billing.
-- Stripe is in test mode for development. Payment status and ownership must be checked server-side.
-- Verify Supabase email identity on the server. Never grant access from query strings, client storage, decoded-but-unverified JWTs or editable user metadata.
+- Keep the daily, original gameplay and local stats working.
+- Practice and archive games are owned by an anonymous browser session. Check that ownership on the server; never trust query strings or client storage for it.
 - Keep `.env*` (except `.env.example`), credentials, database dumps, cookies, access tokens and customer data out of Git, logs, screenshots and issue bodies.
 - Do not reapply database migrations to the existing project. New schema changes need migrations and verification.
 - Run typecheck, lint and relevant tests. Browser tests require a local server or start their own on port 3100.
-- Public repository updates do not deploy production. Production deployment and live billing are separate work.
+- Public repository updates do not deploy production. Production deployment is separate work.
 
-The owner selected a $4.99 USD one-time Unlimited purchase on October 12, 2026. Preserve that model. The historical Claude experiment must not replace the server-side purchase checks or Supabase verified-email restoration.
+The game is free: the owner removed payments on November 12, 2026. Unlimited, practice and the daily archive are open to everyone. Don't add billing back unless the owner asks.

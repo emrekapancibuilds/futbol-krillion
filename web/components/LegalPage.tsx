@@ -1,11 +1,10 @@
 import Link from "next/link";
 
-// Shared frame for the Privacy, Terms and Refunds pages: logo, one long panel, links between them.
+// Shared frame for the Privacy and Terms pages: logo, one long panel, links between them.
 
-import { RESTORE_BY_EMAIL, SUPPORT_EMAIL } from "@/lib/support.ts";
+import { SUPPORT_EMAIL } from "@/lib/support.ts";
 
 export const CONTACT = SUPPORT_EMAIL;
-export { RESTORE_BY_EMAIL };
 
 export function Mail() {
   return <a href={`mailto:${CONTACT}`}>{CONTACT}</a>;
@@ -25,7 +24,6 @@ export default function LegalPage({ title, effective, children }: { title: strin
           <Link className="linkish" href="/">Back to the game</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
-          <Link href="/refunds">Refunds</Link>
         </p>
       </article>
     </main>

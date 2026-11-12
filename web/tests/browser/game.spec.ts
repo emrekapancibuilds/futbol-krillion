@@ -1,11 +1,8 @@
-import { test, expect, type Page } from '@playwright/test';
-const free={premium:false,canManage:false,configured:true,restoreAvailable:true,status:'free',purchasedAt:null};
-const premium={...free,premium:true,canManage:true,status:'paid',purchasedAt:'2026-10-12T00:00:00Z'};
-// Non-subscribers get the unlock pop-up when they arrive on /unlimited (user, 2026-10-12); tests that need the page behind it close it first.
-const pitch=(page:Page)=>page.getByRole('dialog',{name:'Unlock Unlimited'});
-async function closePitch(page:Page){await expect(pitch(page)).toBeVisible();await page.keyboard.press('Escape');await expect(pitch(page)).toHaveCount(0);}
+import { test, expect } from '@playwright/test';
+// Futkrill is free (owner, 2026-11-12: "get rid of payments"): no prices, checkout, unlock pop-up, receipts or restore.
+const PAYMENT=/\$\d|UNLOCK|Restore Purchase|View receipt|checkout|pay once|Hey, I.m Emre/i;
 
-test('daily stays free; one-time pricing matches the existing pixel design on desktop and mobile',async({page})=>{
+test('the daily and Unlimited are free and fit the pixel design on desktop and mobile',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await expect(page.getByRole('heading',{name:'DAILY'})).toBeVisible();
  await expect(page.getByText(/30 seconds each/)).toBeVisible();
@@ -15,14 +12,13 @@ test('daily stays free; one-time pricing matches the existing pixel design on de
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:'tests/browser/daily-mobile.png',fullPage:true});
  await page.setViewportSize({width:1280,height:720});
- await page.goto('/unlimited');await closePitch(page);await expect(page.getByText('$7.99 USD · pay once',{exact:true})).toBeVisible();
- await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'})).toBeVisible();
- await expect(page.getByText(/One payment unlocks Unlimited/)).toBeVisible();
- await expect(page.getByText(/Renews monthly|Manage Subscription/)).toHaveCount(0);
- await page.screenshot({path:'tests/browser/billing-desktop.png',fullPage:true});
+ await page.goto('/unlimited');
+ await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toBeVisible();
+ await expect(page.getByText(PAYMENT)).toHaveCount(0);
+ await page.screenshot({path:'tests/browser/unlimited-hub-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
- await page.screenshot({path:'tests/browser/billing-mobile.png',fullPage:true});
+ await page.screenshot({path:'tests/browser/unlimited-hub-mobile.png',fullPage:true});
  expect(errors).toEqual([]);
 });
 
@@ -36,77 +32,25 @@ test('free player passes a round and retains daily progress after reload',async(
  expect(saved[0].results).toHaveLength(1);
 });
 
-test('forged flags and credentials cannot unlock either premium API family',async({page})=>{
- await page.goto('/unlimited');await closePitch(page);await page.evaluate(()=>localStorage.setItem('isPremium','true'));
- await page.getByRole('button',{name:'PRACTICE',exact:true}).click();
- await expect(page.getByRole('status')).toContainText('Unlimited unlocks');
- await page.getByRole('button',{name:'DAILY ARCHIVE',exact:true}).click();
- await expect(page.getByRole('status')).toContainText('Upgrade to Unlimited');
- for (const [path,data] of Object.entries({
-  '/api/games':{mode:'practice',premium:true}, '/api/unlimited/start':{category:'mixed',seen:[]},
-  '/api/round/answer':{prompt:'p0000000000',token:'forged',input:'Messi'},
-  '/api/round/pass':{prompt:'p0000000000',token:'forged'},
-  '/api/round/reveal':{prompt:'p0000000000',token:'forged'}
- })) {
-  const response=await page.request.post(path,{data,headers:{origin:'http://localhost:3100',cookie:'fk_session=forged'}});
-  expect([402,503]).toContain(response.status());expect(await response.json()).not.toHaveProperty('token');
+test('Unlimited, practice and the archive need no purchase; other sites still cannot call the APIs',async({page})=>{
+ const origin={origin:'http://localhost:3100'};
+ const unlimited=await page.request.post('/api/unlimited/start',{data:{category:'mixed',seen:[]},headers:origin});
+ expect(unlimited.status()).toBe(200);expect(await unlimited.json()).toHaveProperty('token');   // no session, no cookie, no purchase
+ const archive=await page.request.get('/api/archive');expect(archive.status()).toBe(200);
+ expect(Array.isArray((await archive.json()).days)).toBe(true);
+ const practice=await page.request.post('/api/games',{data:{mode:'practice'},headers:origin});
+ expect([200,503]).toContain(practice.status());                                              // 503 only where no database is configured
+ expect(practice.status()).not.toBe(402);
+ const csrf=await page.request.post('/api/unlimited/start',{data:{category:'mixed',seen:[]},headers:{origin:'https://attacker.example'}});
+ expect(csrf.status()).toBe(403);
+ for (const path of ['/api/billing/checkout','/api/billing/session','/api/stripe/webhook']) {
+  const gone=await page.request.post(path,{data:{},headers:origin});expect(gone.status()).toBe(404);
  }
- const csrf=await page.request.post('/api/billing/checkout',{data:{},headers:{origin:'https://attacker.example'}});expect(csrf.status()).toBe(403);
- const large=await page.request.post('/api/unlimited/start',{data:{seen:Array(2000).fill('p0123456789')},headers:{origin:'http://localhost:3100'}});
- expect([402,503]).toContain(large.status());
- await page.goto('/unlimited/play');await expect(page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'})).toBeVisible();
- await expect(page.getByRole('button',{name:'MIXED',exact:true})).toHaveCount(0);
+ await page.goto('/unlimited/play');await expect(page.getByRole('button',{name:'MIXED',exact:true})).toBeVisible();
+ await expect(page.getByText(PAYMENT)).toHaveCount(0);
 });
 
-test('checkout provider errors leave free play available',async({page})=>{
- await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
- await page.route('**/api/billing/checkout',r=>r.fulfill({status:503,json:{error:'Checkout temporarily unavailable.'}}));
- await page.goto('/unlimited');await expect(pitch(page)).toBeVisible();await pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'}).click();
- await expect(pitch(page)).toContainText('Checkout temporarily unavailable');
- await closePitch(page);await page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'}).click();
- await expect(page.getByRole('status')).toContainText('Checkout temporarily unavailable');
- await page.goto('/');await expect(page.getByRole('button',{name:'KICK OFF',exact:true})).toBeEnabled();
-});
-
-test('anonymous bootstrap is coalesced before checkout',async({page})=>{
- let requests=0;let release!:()=>void;
- const ready=new Promise<void>(resolve=>{release=resolve;});
- await page.route('**/api/billing/session',async r=>{requests++;await ready;await r.fulfill({json:free});});
- await page.goto('/unlimited');const upgrade=page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
- await expect(upgrade).toHaveCount(0);await page.evaluate(()=>window.dispatchEvent(new Event('focus')));release();   // no buy button (or pop-up) until the bootstrap is back
- await closePitch(page);await expect(upgrade).toBeEnabled();expect(requests).toBe(1);
-});
-
-test('restore removes token fragment and requires an explicit verification POST',async({page})=>{
- await page.route('**/api/billing/restore/verify',r=>{
-  expect(r.request().method()).toBe('POST');expect(r.request().postDataJSON()).toEqual({token:'verification-fixture',accessToken:'signed.email.proof'});
-  return r.fulfill({json:{...premium,message:'Purchase restored to this browser.'}});
- });
- await page.goto('/billing/restore?request=verification-fixture#access_token=signed.email.proof&refresh_token=discard-me');
- await expect(page).toHaveURL('http://localhost:3100/billing/restore');
- await expect(page.getByRole('heading',{name:'UNLIMITED ACTIVE'})).toHaveCount(0);
- expect(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).not.toContain('signed.email.proof');
- expect(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).not.toContain('discard-me');
- await page.getByRole('button',{name:'RESTORE TO THIS BROWSER'}).click();
- await expect(page.getByRole('heading',{name:'UNLIMITED ACTIVE'})).toBeVisible();
- await expect(page.getByRole('link',{name:'PLAY UNLIMITED'})).toHaveAttribute('href','/unlimited/play');
-});
-
-test('success URL alone cannot activate premium; cancellation returns safely',async({page})=>{
- await page.goto('/billing/success');await expect(page.getByRole('status')).toContainText('No checkout was specified');
- await expect(page.getByRole('heading',{name:'UNLIMITED ACTIVE'})).toHaveCount(0);
- let confirmations=0;
- await page.route('**/api/billing/checkout/confirm',r=>++confirmations===1
-  ? r.fulfill({status:409,json:{error:'Another request is in progress. Please try again in a moment.'}})
-  : r.fulfill({json:premium}));
- await page.goto('/billing/success?session_id=cs_test_fixture');
- await expect(page.getByRole('heading',{name:'UNLIMITED ACTIVE'})).toBeVisible();
- expect(confirmations).toBe(2);
- await page.goto('/billing/cancel');await expect(page.getByRole('status')).toContainText('Checkout canceled');
-});
-
-test('existing Unlimited categories, seen prompts and lifetime totals survive purchase integration',async({page})=>{
- await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
+test('existing Unlimited categories, seen prompts and lifetime totals carry on',async({page})=>{
  await page.goto('/');
  await page.evaluate(()=>localStorage.setItem('fk:unlimited',JSON.stringify({results:[],category:'premier-league',total:4321,played:21,sets:3,seen:['pold']})));
  await page.route('**/api/unlimited/start',r=>{
@@ -125,8 +69,7 @@ test('existing Unlimited categories, seen prompts and lifetime totals survive pu
  await page.screenshot({path:'tests/browser/unlimited-desktop.png',fullPage:true});
 });
 
-test('archive progress and streaks remain separate from free daily',async({page})=>{
- await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
+test('archive progress and streaks remain separate from the daily',async({page})=>{
  await page.route('**/api/archive',r=>r.fulfill({json:{days:[{number:1,date:'2026-10-11'}]}}));
  await page.route('**/api/games',r=>r.fulfill({json:{number:1,date:'2026-10-11',rounds:7,nextAt:'2026-10-13T00:00:00Z',snapshot:'2026-07-06',mode:'archive',gameId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'}}));
  await page.route('**/api/round/start',r=>{
@@ -144,8 +87,7 @@ test('archive progress and streaks remain separate from free daily',async({page}
  expect(await page.evaluate(()=>localStorage.getItem('fk:day:1'))).toBeNull();
 });
 
-test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE and DAILY ARCHIVE',async({page})=>{
- await page.route('**/api/billing/session',r=>r.fulfill({json:premium}));
+test('everyone sees Unlimited first, a daily countdown, and yellow PRACTICE and DAILY ARCHIVE',async({page})=>{
  await page.goto('/unlimited');
  const panel=page.getByRole('region',{name:'Futkrill Unlimited'});
  const daily=page.getByRole('region',{name:"Today's daily"});
@@ -167,41 +109,19 @@ test('subscribers see Unlimited first, a daily countdown, and yellow PRACTICE an
  await expect(daily.getByRole('link',{name:"PLAY TODAY'S DAILY"})).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
- await page.screenshot({path:'tests/browser/unlimited-subscriber-mobile.png',fullPage:true});
+ await page.screenshot({path:'tests/browser/unlimited-mobile.png',fullPage:true});
 });
 
-test('non-subscribers get a compact unlock pop-up with the buy button below the pitch; closing it leaves the page',async({page})=>{
- await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
+test('no one gets a sales pitch: no pop-up, price, unlock button, receipt or restore link',async({page})=>{
  await page.goto('/unlimited');
- const note=pitch(page).getByText(/Hey, I.m Emre/);const buy=pitch(page).getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
- await expect(buy).toBeVisible();await expect(note).toBeVisible();
- expect((await buy.boundingBox())!.y).toBeGreaterThan((await note.boundingBox())!.y);
- expect((await pitch(page).boundingBox())!.height).toBeLessThan(700);
- await page.getByRole('button',{name:'Close',exact:true}).click();await expect(pitch(page)).toHaveCount(0);
- await page.reload();await expect(pitch(page)).toBeVisible();                       // every arrival
- await page.mouse.click(5,5);await expect(pitch(page)).toHaveCount(0);               // click outside also closes it
- const perks=page.getByText('Out of dailies? Keep playing.');
- await expect(perks).toBeVisible();
- await expect(page.getByRole('region',{name:"Today's daily"})).toHaveCount(0);
- await expect(page.getByText(/Wrexham|two-club|No ads/)).toHaveCount(0);
- const panelNote=page.getByText(/Hey, I.m Emre/);const panelBuy=page.getByRole('button',{name:'UNLOCK UNLIMITED — $7.99'});
- expect((await perks.boundingBox())!.y).toBeLessThan((await panelBuy.boundingBox())!.y);
- expect((await panelBuy.boundingBox())!.y).toBeGreaterThan((await panelNote.boundingBox())!.y);   // CTA follows the pitch here too
- await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toHaveClass(/secondary/);
-});
-
-test('players who paid never see the sales pitch while their status loads',async({page})=>{
- let release!:()=>void;const ready=new Promise<void>(resolve=>{release=resolve;});
- await page.route('**/api/billing/session',async r=>{await ready;await r.fulfill({json:premium});});
- await page.goto('/unlimited');
- await expect(page.getByText(/Checking your Unlimited/)).toBeVisible();
- await expect(page.getByText(/Hey, I.m Emre/)).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'PRACTICE',exact:true})).toBeVisible();
+ await page.waitForTimeout(500);
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.getByText(PAYMENT)).toHaveCount(0);
  await expect(page.getByText('Out of dailies? Keep playing.')).toHaveCount(0);
- await expect(pitch(page)).toHaveCount(0);
- release();
- await expect(page.getByText('Unlimited is yours. Play as many sets as you like.')).toBeVisible();
- await expect(page.getByText(/Hey, I.m Emre/)).toHaveCount(0);
- await expect(pitch(page)).toHaveCount(0);
+ for (const path of ['/','/terms','/privacy']) {
+  await page.goto(path);await expect(page.getByRole('link',{name:/Refunds?$/})).toHaveCount(0);
+ }
 });
 
 test('the header (logo, EXIT, score) fits a 375px phone during a round, and the page is named Futkrill',async({page})=>{
@@ -224,40 +144,21 @@ test('the logo is the same one-line FUTKRILL wordmark in the header of every pag
  }
 });
 
-test('lost access: Restore Purchase tells people to email the owner (restore emails are not set up yet)',async({page})=>{
- await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
- let emailRequests=0;await page.route('**/api/billing/restore/request',r=>{emailRequests++;return r.fulfill({json:{message:'x'}});});
- await page.goto('/unlimited');await closePitch(page);
- await page.getByRole('button',{name:'Restore Purchase'}).click();
- const help=page.getByTestId('restore-help');
- await expect(help).toContainText(/lost access|new device/i);
- await expect(help.getByRole('link',{name:'futkrill@gmail.com'})).toHaveAttribute('href',/^mailto:futkrill@gmail\.com/);
- await expect(page.getByLabel('Email used at checkout')).toHaveCount(0);                 // no form that can't send
- await expect(page.getByRole('button',{name:'SEND RESTORE LINK'})).toHaveCount(0);
- expect(emailRequests).toBe(0);
-});
-
-test('the terms and privacy pages say to contact the owner for lost access, not to use a restore email',async({page})=>{
+test('the terms and privacy pages describe a free game: no price, checkout, refunds or restore',async({page})=>{
  for (const path of ['/terms','/privacy']) {
   await page.goto(path);
-  await expect(page.locator('article')).not.toContainText(/verification link|passwordless|through Restore Purchase|verify your payment email/i);
-  await expect(page.locator('article')).toContainText(/lose access|lost access/i);
+  const article=page.locator('article');
+  await expect(article).toContainText(/free/i);
+  await expect(article).not.toContainText(/\$\d|Checkout|refund|Restore Purchase|paid access|optional paid/i);
+  await expect(article).toContainText('November 12, 2026');
  }
 });
 
-test('the refund policy page exists and is linked from the terms, the legal pages and the unlock pitch',async({page})=>{
- const res=await page.goto('/refunds');expect(res!.status()).toBe(200);
- await expect(page).toHaveTitle(/Refunds/);
- await expect(page.locator('article')).toContainText('14 days');
- await expect(page.locator('article')).toContainText(/full refund.*(ends|removes|no longer)/i);        // matches what the code does
- await expect(page.locator('article').getByRole('link',{name:'futkrill@gmail.com'}).first()).toHaveAttribute('href',/^mailto:/);
- for (const path of ['/terms','/privacy']) {
-  await page.goto(path);
-  await expect(page.locator('article').getByRole('link',{name:/Refunds?$/}).first()).toHaveAttribute('href','/refunds');
+test('old payment links still land somewhere useful: refunds on the terms, billing pages on Unlimited',async({page})=>{
+ await page.goto('/refunds');await expect(page).toHaveURL(/\/terms$/);
+ for (const path of ['/billing/success?session_id=cs_test_fixture','/billing/cancel','/billing/restore']) {
+  await page.goto(path);await expect(page).toHaveURL(/\/unlimited(\?.*)?$/);
  }
- await page.route('**/api/billing/session',r=>r.fulfill({json:free}));
- await page.goto('/unlimited');
- await expect(pitch(page).getByRole('link',{name:/14-day refunds/})).toHaveAttribute('href','/refunds');
 });
 
 test('streak: back-to-back correct answers earn a growing bonus, a pass loses it, and the flame lights and burns out',async({page})=>{
@@ -383,6 +284,7 @@ test('the first page has a big white FUTKRILL wordmark with a gold outline, and 
 });
 
 // --- Niche-o-meter (user, 2026-10-16) ----------------------------------------------------------------------------
+
 test('niche-o-meter: the intro pops up only the very first time, and a reload never shows it again',async({page})=>{
  await page.goto('/niche');
  const intro=page.getByRole('dialog',{name:/Niche-o-meter/});
